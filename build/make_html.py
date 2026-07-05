@@ -1,0 +1,515 @@
+import json
+
+payload = open('build/payload.json').read()
+
+html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CalSim3 Central Valley Water Allocation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+  #map{position:absolute;inset:0}
+  .panel{position:absolute;z-index:1000;background:rgba(255,255,255,.94);border-radius:10px;
+         box-shadow:0 2px 10px rgba(0,0,0,.25);padding:12px 16px}
+  #ctrl{left:50%;transform:translateX(-50%);bottom:18px;width:min(680px,92vw)}
+  #title{top:12px;left:12px;max-width:340px}
+  #title h1{font-size:16px;margin:0 0 4px}
+  #title p{font-size:12px;margin:0;color:#555}
+  #datebox{font-size:20px;font-weight:600;min-width:150px;text-align:center}
+  .row{display:flex;align-items:center;gap:10px}
+  input[type=range]{flex:1}
+  button{border:1px solid #bbb;background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px}
+  button:hover{background:#eee}
+  #play{width:64px;font-weight:600}
+  #legend{bottom:18px;right:12px;font-size:12px;line-height:1.7}
+  .sw{display:inline-block;width:22px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:6px}
+  select{font-size:13px;padding:2px}
+  #strip{width:100%;height:44px;display:block;margin-top:10px;border-radius:4px;cursor:pointer}
+  #stories button{font-size:12px;padding:3px 8px;border-radius:12px;border:1px solid #c9a227;background:#fdf6e3}
+  #stories button:hover{background:#f5e9c8}
+  #chart{top:12px;right:12px;width:min(480px,94vw);display:none}
+  #chart h2{font-size:13px;margin:0 0 2px;padding-right:20px}
+  #chart .sub{font-size:11px;color:#666;margin-bottom:6px}
+  #chartclose{position:absolute;top:8px;right:10px;border:none;background:none;font-size:16px;color:#888;padding:0}
+  #wkey div.k{display:flex;align-items:center;gap:6px;margin:1px 0}
+  #wkey .bar{background:#1668a8;border-radius:2px;width:26px}
+  .leaflet-tooltip{font-size:12px}
+  @media (max-width:700px){#legend{display:none}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel" id="title">
+  <h1>Central Valley Water Allocation &mdash; CalSim3</h1>
+  <p>Monthly simulated channel flows and reservoir storage, Oct&nbsp;1921&ndash;Sep&nbsp;2021
+     (COEQWAL scenario s0020). Line width &prop; flow; circle size &prop; storage.</p>
+  <div id="stories" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px"></div>
+  <div id="storyblurb" style="font-size:12px;color:#333;margin-top:6px;display:none;
+       border-left:3px solid #e07b28;padding-left:8px"></div>
+</div>
+<div class="panel" id="ctrl">
+  <div class="row">
+    <button id="play">&#9654; Play</button>
+    <button id="back">&#8722;1m</button>
+    <button id="fwd">+1m</button>
+    <button id="backy">&#8722;1y</button>
+    <button id="fwdy">+1y</button>
+    <div id="datebox"></div>
+    <select id="speed">
+      <option value="1500">Slow</option>
+      <option value="800" selected>Normal</option>
+      <option value="400">Fast</option>
+    </select>
+  </div>
+  <canvas id="strip"></canvas>
+  <div class="row" style="margin-top:2px">
+    <input type="range" id="slider" min="0" max="1199" value="0" step="1">
+  </div>
+</div>
+<div class="panel" id="chart">
+  <button id="chartclose">&times;</button>
+  <h2 id="charttitle"></h2>
+  <div class="sub" id="chartsub"></div>
+  <canvas id="chartmain" style="width:100%;height:170px"></canvas>
+  <div class="sub" style="margin-top:6px">Average by month (Oct&ndash;Sep)</div>
+  <canvas id="chartclim" style="width:100%;height:90px"></canvas>
+</div>
+<div class="panel" id="legend">
+  <b>Legend</b><br>
+  <span class="sw" style="background:#1668a8"></span>River / stream flow<br>
+  <span class="sw" style="background:#e07b28"></span>Canal / aqueduct<br>
+  <span class="sw" style="background:#3aa6a0"></span>Flood bypass
+  <div id="wkey"></div>
+  <span class="dot" style="background:rgba(30,90,160,.75);border:2px solid #1e5aa0"></span>Reservoir storage<br>
+  <span class="dot" style="background:none;border:2px solid #1e5aa0"></span>Reservoir capacity<br>  <span style="display:inline-block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #7b2d8b;vertical-align:middle;margin-right:8px"></span>Export pumping plant<br>
+  <span class="dot" style="background:rgba(74,140,59,.55);border-radius:2px"></span>Farm water deliveries<br>
+  <span class="dot" style="background:rgba(134,89,165,.55);border-radius:2px"></span>City water deliveries<br>
+  <span class="dot" style="background:rgba(46,139,139,.55);border-radius:2px"></span>Wildlife refuge deliveries<br>
+  <label style="cursor:pointer"><input type="checkbox" id="dutoggle" checked> Delivery areas <span style="color:#888">(zoom in)</span></label><br>
+
+  <span class="sw" style="background:#fff;border:1px solid #999;height:3px"></span>Particles: normal direction<br>
+  <span class="sw" style="background:#d62828;height:3px"></span>Particles: reversed flow<br>
+  <label style="cursor:pointer"><input type="checkbox" id="ptoggle" checked> Flow direction particles</label><br>
+  <span style="color:#666">Timeline: year type (Wet&rarr;Critical)<br>+ total reservoir storage curve</span>
+</div>
+<script id="data" type="application/json">__PAYLOAD__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const map = L.map('map',{preferCanvas:true}).setView([38.3,-121.4],7);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  {attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:12}).addTo(map);
+const canvas = L.canvas({padding:.3});
+
+const COLORS={river:'#1668a8',canal:'#e07b28',bypass:'#3aa6a0'};
+const QREF=D.qref;
+function widthFor(q){ if(q==null||q<=0)return .6; return .8+8*Math.sqrt(Math.min(q,QREF)/QREF); }
+function fmt(x){ return x==null?'n/a':x.toLocaleString(); }
+
+const arcLayers=[];
+for(const a of D.arcs){
+  const latlngs=a.g.map(line=>line.map(p=>[p[1],p[0]]));
+  const pl=L.polyline(latlngs,{renderer:canvas,color:COLORS[a.c],weight:1,opacity:.85});
+  pl.bindTooltip('',{sticky:true});
+  pl._arc=a;
+  pl.on('tooltipopen',()=>{
+    const q=a.q[cur];
+    pl.setTooltipContent('<b>'+a.n+'</b><br>'+a.i+'<br>Flow: '+fmt(q)+' cfs'+
+      (q==null?'':' ('+fmt(Math.round(cfsToTAF(q)*10)/10)+' TAF/month)')+
+      '<br><span style="color:#888">Click for 100-year record</span>');
+  });
+  pl.on('click',()=>openChart({kind:'arc',f:a}));
+  pl.addTo(map); arcLayers.push(pl);
+}
+
+const CAPMAX=Math.max(...D.res.map(r=>r.cap));
+const RMAX=24;
+function radiusFor(v){ return Math.max(2, RMAX*Math.sqrt(v/CAPMAX)); }
+const resLayers=[];
+for(const r of D.res){
+  const ring=L.circleMarker([r.ll[1],r.ll[0]],{renderer:canvas,radius:radiusFor(r.cap),
+      color:'#1e5aa0',weight:1.4,fill:false,opacity:.8});
+  const fillC=L.circleMarker([r.ll[1],r.ll[0]],{renderer:canvas,radius:2,stroke:false,
+      fillColor:'#1e5aa0',fillOpacity:.65});
+  const grp=L.featureGroup([ring,fillC]).addTo(map);
+  grp.bindTooltip('',{sticky:true});
+  grp.on('tooltipopen',()=>{
+    const s=r.s[cur], pct=s==null?'n/a':Math.round(100*s/r.cap);
+    grp.setTooltipContent('<b>'+r.n+'</b> ('+r.riv+')<br>Storage: '+fmt(s)+' of '+fmt(r.cap)+
+      ' TAF max ('+pct+'%)<br><span style="color:#888">Click for 100-year record</span>');
+  });
+  grp.on('click',()=>openChart({kind:'res',f:r}));
+  resLayers.push({r,fillC});
+}
+
+function daysInMonth(i){ const [y,m]=D.months[i].split('-').map(Number); return new Date(y,m,0).getDate(); }
+function cfsToTAF(q){ return q*1.98347*daysInMonth(cur)/1000; }
+
+// ===== click-to-chart =====
+// ===== demand-unit delivery areas =====
+map.createPane('dupane'); map.getPane('dupane').style.zIndex=350;
+const DU_COLORS={ag:'#4a8c3b',urban:'#8659a5',refuge:'#2e8b8b'};
+const DU_LABEL={ag:'Agriculture',urban:'Urban',refuge:'Wildlife refuge'};
+const DEPTH_REF=0.6; // ft of applied water per month at full shade
+const duLayers=[];
+let duOn=true, duVisible=false;
+for(const u of D.dus){
+  const poly=L.polygon(u.g,{pane:'dupane',renderer:canvas,color:DU_COLORS[u.k],weight:.7,
+    opacity:.5,fillColor:DU_COLORS[u.k],fillOpacity:0,interactive:true});
+  poly.bindTooltip('',{sticky:true});
+  poly.on('tooltipopen',()=>{
+    let body;
+    if(u.gw){ body='No surface-water deliveries in model<br>(supplied by groundwater)'; }
+    else{
+      const v=u.d[cur], ft=v*1000/u.ac;
+      body='Delivery: '+v.toFixed(1)+' TAF this month ('+ft.toFixed(2)+' ft over '+fmt(u.ac)+' acres)'+
+           '<br><span style="color:#888">Click for 100-year record</span>';
+    }
+    poly.setTooltipContent('<b>'+DU_LABEL[u.k]+' service area '+u.i+'</b><br>'+body);
+  });
+  if(!u.gw) poly.on('click',()=>openChart({kind:'du',f:u}));
+  poly.addTo(map); duLayers.push({u,poly});
+}
+function duUpdate(){
+  duVisible = duOn && map.getZoom()>=8;
+  for(const o of duLayers){
+    if(!duVisible){ o.poly.setStyle({fillOpacity:0,opacity:0}); continue; }
+    if(o.u.gw){ o.poly.setStyle({fillOpacity:.04,opacity:.35,dashArray:'3,4'}); continue; }
+    const ft=o.u.d[cur]*1000/o.u.ac;
+    o.poly.setStyle({fillOpacity:Math.min(.62,.62*ft/DEPTH_REF),opacity:.5,dashArray:null});
+  }
+}
+map.on('zoomend',duUpdate);
+
+// ===== export pumping plants =====
+const PQMAX = Math.max(...D.pumps.flatMap(p=>p.q.filter(v=>v!=null)));
+function pumpIcon(q){
+  const s = q==null||q<=0 ? 7 : 8 + 20*Math.sqrt(q/PQMAX);
+  return L.divIcon({className:'', iconSize:[2*s,2*s], iconAnchor:[s,s*1.2],
+    html:'<div style="width:0;height:0;border-left:'+s+'px solid transparent;'+
+         'border-right:'+s+'px solid transparent;border-bottom:'+(s*1.7)+'px solid #7b2d8b;'+
+         'opacity:.88"></div>'});
+}
+const pumpMarkers=[];
+for(const p of D.pumps){
+  const mk=L.marker([p.ll[1],p.ll[0]],{icon:pumpIcon(p.q[0]),zIndexOffset:800});
+  mk.bindTooltip('',{sticky:true});
+  mk.on('tooltipopen',()=>{
+    const q=p.q[cur];
+    mk.setTooltipContent('<b>'+p.n+'</b><br>'+p.sub+'<br>Exporting: '+fmt(q)+' cfs'+
+      (q==null?'':' ('+fmt(Math.round(cfsToTAF(q)*10)/10)+' TAF/month)')+
+      '<br><span style="color:#888">Click for 100-year record</span>');
+  });
+  mk.on('click',()=>openChart({kind:'pump',f:p}));
+  mk.addTo(map); pumpMarkers.push({p,mk});
+}
+
+let chartFeat=null;
+const chartEl=document.getElementById('chart');
+function openChart(cf){ chartFeat=cf; chartEl.style.display='block'; drawChart(); }
+document.getElementById('chartclose').onclick=()=>{ chartFeat=null; chartEl.style.display='none'; };
+function setupCanvas(cv){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0);
+  return [c,w,h];
+}
+function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v||1))); return Math.ceil(v/p)*p; }
+function drawChart(){
+  if(!chartFeat) return;
+  const isRes = chartFeat.kind==='res', isDU = chartFeat.kind==='du', f=chartFeat.f;
+  const vals = isDU ? f.d : (isRes ? f.s : f.q);
+  const unit = isRes ? 'TAF' : isDU ? 'TAF/mo' : 'cfs';
+  document.getElementById('charttitle').textContent = isDU
+    ? DU_LABEL[f.k]+' service area '+f.i+' — deliveries'
+    : f.n + (isRes ? ' — storage' : chartFeat.kind==='pump' ? ' — Delta exports' : ' — flow');
+  const v=vals[cur];
+  document.getElementById('chartsub').innerHTML = f.i+' &middot; '+D.months[cur]+': <b>'+fmt(v)+' '+unit+'</b>'+
+    (isRes||isDU||v==null?'':' ('+fmt(Math.round(cfsToTAF(v)*10)/10)+' TAF/mo)');
+  // --- main: full record
+  const [c,w,h]=setupCanvas(document.getElementById('chartmain'));
+  const vmax=niceMax(Math.max(...vals.filter(x=>x!=null)));
+  const vmin=Math.min(0,...vals.filter(x=>x!=null));
+  const yof=v=> h-14-(h-22)*((v-vmin)/(vmax-vmin||1));
+  c.clearRect(0,0,w,h);
+  // wyt background bands (subtle)
+  for(let k=0;k<D.wyt.length;k++){
+    c.fillStyle=WYT_COLORS[D.wyt[k]-1]; c.globalAlpha=.13;
+    c.fillRect(k/D.wyt.length*w,0,w/D.wyt.length+1,h-14);
+  }
+  c.globalAlpha=1;
+  // zero line if negative values
+  if(vmin<0){ c.strokeStyle='#999'; c.lineWidth=1; c.setLineDash([3,3]);
+    c.beginPath(); c.moveTo(0,yof(0)); c.lineTo(w,yof(0)); c.stroke(); c.setLineDash([]); }
+  // series
+  c.strokeStyle= isRes?'#1e5aa0':'#1668a8'; c.lineWidth=1;
+  c.beginPath();
+  for(let i=0;i<vals.length;i++){ if(vals[i]==null) continue;
+    const x=(i+.5)/vals.length*w; i?c.lineTo(x,yof(vals[i])):c.moveTo(x,yof(vals[i])); }
+  c.stroke();
+  // capacity line for reservoirs
+  if(isRes){ c.strokeStyle='#b2182b'; c.setLineDash([4,3]);
+    c.beginPath(); c.moveTo(0,yof(f.cap)); c.lineTo(w,yof(f.cap)); c.stroke(); c.setLineDash([]); }
+  // decade ticks
+  c.fillStyle='#666'; c.font='10px system-ui'; c.textAlign='center';
+  for(let y=1930;y<=2020;y+=10){ const x=((y-1921.75)*12)/1200*w; c.fillText(String(y),x,h-3); }
+  c.textAlign='left'; c.fillText(fmt(vmax)+' '+unit,3,10);
+  if(vmin<0) c.fillText(fmt(Math.round(vmin)),3,yof(vmin)-2);
+  // current-month marker
+  c.strokeStyle='#111'; c.lineWidth=1.5;
+  const mx=(cur+.5)/1200*w;
+  c.beginPath(); c.moveTo(mx,0); c.lineTo(mx,h-14); c.stroke();
+  // --- climatology: mean by calendar month (Oct-Sep)
+  const [c2,w2,h2]=setupCanvas(document.getElementById('chartclim'));
+  const sums=Array(12).fill(0), cnts=Array(12).fill(0);
+  for(let i=0;i<vals.length;i++){ if(vals[i]!=null){ sums[i%12]+=vals[i]; cnts[i%12]++; } }
+  const means=sums.map((s,k)=>s/(cnts[k]||1));
+  const mmax=niceMax(Math.max(...means)), mmin=Math.min(0,...means);
+  c2.clearRect(0,0,w2,h2);
+  const LBL=['O','N','D','J','F','M','A','M','J','J','A','S'];
+  const y2=v=> h2-13-(h2-20)*((v-mmin)/(mmax-mmin||1));
+  for(let k=0;k<12;k++){
+    const x=k/12*w2+3, bw=w2/12-6;
+    c2.fillStyle = k===cur%12 ? '#e07b28' : '#9ec5e0';
+    const y0=y2(Math.max(0,mmin)), y1=y2(means[k]);
+    c2.fillRect(x, Math.min(y0,y1), bw, Math.abs(y0-y1)||1);
+    c2.fillStyle='#666'; c2.font='10px system-ui'; c2.textAlign='center';
+    c2.fillText(LBL[k], x+bw/2, h2-2);
+  }
+  c2.textAlign='left'; c2.fillStyle='#666'; c2.fillText(fmt(Math.round(mmax))+' '+unit,3,10);
+}
+
+// ===== legend flow-width key =====
+(function(){
+  const box=document.getElementById('wkey');
+  for(const q of [1000,10000,50000]){
+    const d=document.createElement('div'); d.className='k';
+    d.innerHTML='<div class="bar" style="height:'+widthFor(q).toFixed(1)+'px"></div>'+fmt(q)+' cfs';
+    box.appendChild(d);
+  }
+})();
+
+const WYT_NAMES=['Wet','Above Normal','Below Normal','Dry','Critical'];
+const WYT_COLORS=['#2b6cb8','#74add1','#c9a227','#e2703a','#b2182b'];
+// total storage across mapped reservoirs, per month
+const TSTOR = D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=r.s[i]; if(v!=null) s+=v; } return s; });
+const TSMAX = Math.max(...TSTOR);
+const strip = document.getElementById('strip');
+let stripBase=null;
+function buildStrip(){
+  const dpr = window.devicePixelRatio||1;
+  const w = strip.clientWidth, h = strip.clientHeight;
+  strip.width=w*dpr; strip.height=h*dpr;
+  stripBase = document.createElement('canvas');
+  stripBase.width=w*dpr; stripBase.height=h*dpr;
+  const c = stripBase.getContext('2d'); c.scale(dpr,dpr);
+  const nwy = D.wyt.length;
+  for(let k=0;k<nwy;k++){
+    c.fillStyle = WYT_COLORS[D.wyt[k]-1];
+    c.globalAlpha = .55;
+    c.fillRect(k/nwy*w, 0, w/nwy+1, h);
+  }
+  c.globalAlpha = 1;
+  // total storage curve
+  c.strokeStyle='rgba(15,25,60,.85)'; c.lineWidth=1.4;
+  c.beginPath();
+  for(let i=0;i<TSTOR.length;i++){
+    const x=(i+.5)/TSTOR.length*w, y=h-3-(h-8)*(TSTOR[i]/TSMAX);
+    i?c.lineTo(x,y):c.moveTo(x,y);
+  }
+  c.stroke();
+}
+function updateStrip(i){
+  if(!stripBase) return;
+  const ctx = strip.getContext('2d');
+  ctx.clearRect(0,0,strip.width,strip.height);
+  ctx.drawImage(stripBase,0,0);
+  const dpr = window.devicePixelRatio||1;
+  const x = ((i+.5)/1200)*strip.clientWidth*dpr;
+  ctx.fillStyle='#111';
+  ctx.fillRect(x-1*dpr,0,2*dpr,strip.height);
+}
+function stripScrub(e){
+  const rect = strip.getBoundingClientRect();
+  const f = Math.max(0,Math.min(.9999,(e.clientX-rect.left)/rect.width));
+  setPlaying(false); render(Math.floor(f*1200));
+}
+strip.addEventListener('pointerdown', e=>{ strip.setPointerCapture(e.pointerId); stripScrub(e);
+  strip.onpointermove=stripScrub; });
+strip.addEventListener('pointerup', ()=>{ strip.onpointermove=null; });
+window.addEventListener('resize', ()=>{ buildStrip(); updateStrip(cur); });
+
+let cur=0, playing=false, timer=null;
+const slider=document.getElementById('slider'), datebox=document.getElementById('datebox');
+
+function render(i){
+  cur=i;
+  const [y,m]=D.months[i].split('-');
+  const wy=Math.floor(i/12);
+  datebox.innerHTML=MONTH_NAMES[+m-1]+' '+y+
+    '<div style="font-size:11px;font-weight:500;color:'+WYT_COLORS[D.wyt[wy]-1]+'">'+WYT_NAMES[D.wyt[wy]-1]+' year</div>';
+  for(const o of pumpMarkers) o.mk.setIcon(pumpIcon(o.p.q[i]));
+  duUpdate();
+  updateStrip(i);
+  if(chartFeat) drawChart();
+  slider.value=i;
+  for(const pl of arcLayers){
+    const q=pl._arc.q[i];
+    pl.setStyle({weight:widthFor(q), opacity:(q==null||q<=0)?.35:.85});
+  }
+  for(const o of resLayers){
+    const s=o.r.s[i];
+    o.fillC.setRadius(s==null?0:radiusFor(s));
+  }
+}
+function step(n){
+  render(((cur+n)%1200+1200)%1200);
+  if(storyEnd!==null && cur>=storyEnd){ setPlaying(false); storyEnd=null; }
+}
+function setPlaying(p){
+  playing=p;
+  document.getElementById('play').innerHTML=p?'&#10074;&#10074; Pause':'&#9654; Play';
+  clearInterval(timer);
+  if(p) timer=setInterval(()=>step(1), +document.getElementById('speed').value);
+}
+document.getElementById('play').onclick=()=>setPlaying(!playing);
+document.getElementById('back').onclick=()=>step(-1);
+document.getElementById('fwd').onclick=()=>step(1);
+document.getElementById('backy').onclick=()=>step(-12);
+document.getElementById('fwdy').onclick=()=>step(12);
+document.getElementById('speed').onchange=()=>{ if(playing) setPlaying(true); };
+slider.oninput=e=>{ setPlaying(false); render(+e.target.value); };
+// ===== guided stories =====
+// month index: (Y-1921)*12 + (M-10)
+const STORIES=[
+ {label:'1976\u201377 Drought', view:[[38.3,-121.4],7], start:648, end:677,
+  blurb:'The two driest back-to-back years on record to that point. Watch reservoir circles shrink to dots and rivers thin to threads \u2014 by late 1977 total storage hits its lowest level of the century.'},
+ {label:'1997 New Year\u2019s Flood', view:[[39.1,-121.8],8], start:901, end:908,
+  blurb:'A warm atmospheric river melts deep snowpack. Watch the Feather and Sacramento swell in January, and the Yolo and Sutter Bypasses \u2014 normally dry \u2014 open up to carry the flood past the cities.'},
+ {label:'The Delta Reversed', view:[[37.93,-121.45],10], start:956, end:971,
+  blurb:'Red particles flow backwards. The SWP and CVP export pumps near Tracy pull Old and Middle Rivers \u2014 and at times the lower San Joaquin itself \u2014 upstream toward the intakes, then south down the aqueducts.'},
+ {label:'Drought to Deluge 2012\u201317', view:[[38.3,-121.4],7], start:1080, end:1151,
+  blurb:'Five dry years drain the system \u2014 then the wettest winter on record refills it in months. The whiplash California\u2019s water system is built to absorb, compressed into one animation.'}
+];
+let storyEnd=null;
+const blurbEl=document.getElementById('storyblurb');
+function runStory(s){
+  setPlaying(false); storyEnd=null;
+  blurbEl.style.display='block'; blurbEl.textContent=s.blurb;
+  render(s.start);
+  map.flyTo(s.view[0], s.view[1], {duration:1.4});
+  map.once('moveend', ()=>{ storyEnd=s.end; setPlaying(true); });
+}
+(function(){
+  const box=document.getElementById('stories');
+  for(const s of STORIES){
+    const b=document.createElement('button'); b.textContent=s.label;
+    b.onclick=()=>runStory(s); box.appendChild(b);
+  }
+})();
+
+buildStrip();
+render(0);
+
+// ===== Particle flow layer (Delta channels + aqueducts) =====
+const P_ARCS = D.arcs.filter(a=>a.p);
+const QP = (()=>{ const v=[]; for(const a of P_ARCS) for(const q of a.q) if(q!=null) v.push(Math.abs(q));
+                  v.sort((x,y)=>x-y); return v[Math.floor(v.length*.98)]||1; })();
+const pcv = document.createElement('canvas');
+pcv.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:500';
+map.getContainer().appendChild(pcv);
+const pctx = pcv.getContext('2d');
+let projArcs=[], particles=[], panim=null, particlesOn=true, moving=false;
+
+function reproject(){
+  const sz = map.getSize();
+  pcv.width=sz.x; pcv.height=sz.y;
+  projArcs=[]; particles=[];
+  const b = map.getBounds().pad(0.15);
+  for(const a of P_ARCS){
+    for(const line of a.g){
+      // cheap bbox reject
+      let inview=false;
+      for(const pt of line){ if(b.contains([pt[1],pt[0]])){ inview=true; break; } }
+      if(!inview) continue;
+      const pts = line.map(pt=>map.latLngToContainerPoint([pt[1],pt[0]]));
+      const cum=[0];
+      for(let i=1;i<pts.length;i++)
+        cum.push(cum[i-1]+Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y));
+      const L = cum[pts.length-1];
+      if(L<8) continue;
+      const tier = a.p===2 ? 2 : 1;
+      const pa = {arc:a, pts, cum, L, tier};
+      projArcs.push(pa);
+    }
+  }
+  // generate particles: tier 1 (canals/Delta) first, then tier 2 (mainstem rivers), capped
+  const CAP = 2500;
+  projArcs.sort((x,y)=>x.tier-y.tier);
+  for(const pa of projArcs){
+    if(particles.length >= CAP) break;
+    const spacing = pa.tier===1 ? 26 : 48;
+    const n = Math.max(1, Math.min(40, Math.round(pa.L/spacing)));
+    for(let k=0;k<n && particles.length<CAP;k++)
+      particles.push({pa, t: Math.random()*pa.L, px:null, py:null});
+  }
+}
+function posAt(pa, t){
+  const {pts,cum} = pa;
+  let lo=0, hi=cum.length-1;
+  while(lo<hi-1){ const mid=(lo+hi)>>1; if(cum[mid]<=t) lo=mid; else hi=mid; }
+  const seg = cum[hi]-cum[lo] || 1;
+  const f = (t-cum[lo])/seg;
+  return [pts[lo].x+f*(pts[hi].x-pts[lo].x), pts[lo].y+f*(pts[hi].y-pts[lo].y)];
+}
+function ptick(){
+  panim = requestAnimationFrame(ptick);
+  if(moving || !particlesOn) return;
+  // fade previous frame -> trails
+  pctx.globalCompositeOperation='destination-out';
+  pctx.fillStyle='rgba(0,0,0,0.14)';
+  pctx.fillRect(0,0,pcv.width,pcv.height);
+  pctx.globalCompositeOperation='source-over';
+  pctx.lineCap='round';
+  for(const p of particles){
+    const q = p.pa.arc.q[cur];
+    if(q==null || Math.abs(q)<25){ p.px=null; continue; }
+    const dir = q>=0?1:-1;
+    const sp = 0.15 + 1.0*Math.sqrt(Math.min(Math.abs(q),QP)/QP);
+    p.t += sp*dir;
+    if(p.t>p.pa.L){ p.t-=p.pa.L; p.px=null; }
+    if(p.t<0){ p.t+=p.pa.L; p.px=null; }
+    const [x,y] = posAt(p.pa, p.t);
+    if(p.px!=null){
+      if(p.pa.tier===1){
+        pctx.strokeStyle = dir<0 ? 'rgba(214,40,40,0.95)' : 'rgba(255,255,255,0.95)';
+        pctx.lineWidth = 2.2;
+      }else{
+        pctx.strokeStyle = dir<0 ? 'rgba(214,40,40,0.75)' : 'rgba(255,255,255,0.5)';
+        pctx.lineWidth = 1.6;
+      }
+      pctx.beginPath(); pctx.moveTo(p.px,p.py); pctx.lineTo(x,y); pctx.stroke();
+    }
+    p.px=x; p.py=y;
+  }
+}
+function pclear(){ pctx.clearRect(0,0,pcv.width,pcv.height); }
+map.on('movestart zoomstart', ()=>{ moving=true; pclear(); });
+map.on('moveend zoomend viewreset resize', ()=>{ reproject(); moving=false; });
+document.getElementById('ptoggle').onchange = e=>{ particlesOn=e.target.checked; pclear(); };
+document.getElementById('dutoggle').onchange = e=>{ duOn=e.target.checked; duUpdate(); };
+reproject();
+ptick();
+</script>
+</body>
+</html>"""
+
+html = html.replace('__PAYLOAD__', payload)
+open('CalSim3_water_map.html','w').write(html)
+import os
+print('HTML MB:', os.path.getsize('CalSim3_water_map.html')/1e6)

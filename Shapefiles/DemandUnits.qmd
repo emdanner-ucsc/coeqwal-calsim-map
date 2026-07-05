@@ -1,0 +1,70 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.28.3-Firenze">
+  <identifier>CS3_DUs_6_23_17</identifier>
+  <parentidentifier></parentidentifier>
+  <language>ENG</language>
+  <type>dataset</type>
+  <title>CS3_DUs_6_23_17</title>
+  <abstract>For a complete discussion of Demand Units, please refer to Chapter 3 of the CalSim 3.0 documentation. 
+
+Demand Units are used by CalSim 3.0 to represent water demands and water use in the Sacramento and San Joaquin valleys. Demand units are the smallest computational units within CalSim 3.0; the model does not distinguish between individual water users within a demand unit. Water Budget Areas (WBA) in the Sacramento Valley were developed from a combination of water district boundaries (best available) and watershed boundaries (CalWater2.2/NRCS NHD) and/or demand aggregate unit (DAU-DWR) boundaries. Demand Units were a further breakdown of WBAs based on water district and/or refuge boundaries. 
+
+For a complete discussion of Demand Units, please refer to Chapter 3 of the CalSim 3.0 documentation. 
+
+Demand Units are used by CalSim 3.0 to represent water demands and water use in the Sacramento and San Joaquin valleys. Demand units are the smallest computational units within CalSim 3.0; the model does not distinguish between individual water users within a demand unit. Water Budget Areas (WBA) in the Sacramento Valley were developed from a combination of water district boundaries (best available) and watershed boundaries (CalWater2.2/NRCS NHD) and/or demand aggregate unit (DAU-DWR) boundaries. Demand Units were a further breakdown of WBAs based on water district and/or refuge boundaries. </abstract>
+  <keywords vocabulary="Search keys">
+    <keyword>InlandWaters</keyword>
+    <keyword>water modeling</keyword>
+  </keywords>
+  <keywords vocabulary="gmd:topicCategory">
+    <keyword>REQUIRED: Common-use word or phrase used to describe the subject of the data set.</keyword>
+  </keywords>
+  <contact>
+    <contactAddress>
+      <type>physical</type>
+      <address>1416 9th Street Room 252-1</address>
+      <city>Sacramento</city>
+      <administrativearea>CA</administrativearea>
+      <postalcode>95814</postalcode>
+      <country>US</country>
+    </contactAddress>
+    <name>Jane Schafer-Kramer</name>
+    <organization>Department of Water Resources, Modeling Support Branch</organization>
+    <position>GIS Analyst</position>
+    <voice>916-653-4441</voice>
+    <fax></fax>
+    <email>jane.schafer-kramer@water.ca.gov</email>
+    <role></role>
+  </contact>
+  <links>
+    <link name="File Geodatabase Feature Class" url="file://\\ussac1s02\mss\gis\gis_jobs\US_Bureau_Reclamation\TO_06A3_CalSimIII_Extension\_DATA\Geodatabase\CalSimIII_20090331.gdb" description="" type="Local Area Network" mimeType="" size="" format=""/>
+  </links>
+  <fees></fees>
+  <constraints type="Limitations of use">for visualization purposes only</constraints>
+  <constraints type="Access">REQUIRED: Restrictions and legal prerequisites for accessing the data set.</constraints>
+  <rights>Stephen Irving and Andy Draper of MWH. Table edits by Jane Schafer-Kramer of DWR</rights>
+  <rights>REQUIRED: Restrictions and legal prerequisites for using the data set after access is granted.</rights>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys nativeFormat="Wkt">
+      <wkt></wkt>
+      <proj4>+proj=aea +lat_0=0 +lon_0=-120 +lat_1=34 +lat_2=40.5 +x_0=0 +y_0=-4000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs</proj4>
+      <srsid>0</srsid>
+      <srid>0</srid>
+      <authid></authid>
+      <description></description>
+      <projectionacronym></projectionacronym>
+      <ellipsoidacronym></ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial dimensions="2" crs="" minx="239185.14079999999376014" maxx="530050.81830000004265457" miny="3954049.66000000014901161" maxy="4542462.09619999956339598" maxz="0" minz="0"/>
+    <temporal>
+      <period>
+        <start>2013-12-30T15:00:00Z</start>
+        <end></end>
+      </period>
+    </temporal>
+  </extent>
+</qgis>

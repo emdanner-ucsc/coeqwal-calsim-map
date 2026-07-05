@@ -1,0 +1,9 @@
+# Large source data — exceeds GitHub's 100 MB limit; see README for sources
+s0020_coeqwal_calsim_output.csv
+*.gpkg
+
+# Regenerable build intermediates
+build/*.json
+
+# OS
+.DS_Store
