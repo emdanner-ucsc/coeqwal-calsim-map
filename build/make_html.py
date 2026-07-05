@@ -157,7 +157,8 @@ html = """<!DOCTYPE html>
   <b>Legend</b><br>
   <span class="sw" style="background:#1668a8"></span>River / stream flow<br>
   <span class="sw" style="background:#e07b28"></span>Canal / aqueduct<br>
-  <span class="sw" style="background:#3aa6a0"></span>Flood bypass
+  <span class="sw" style="background:#3aa6a0"></span>Flood bypass<br>
+  <span class="sw" style="background:#7fa8c9;height:2px"></span>Minor stream / canal <span style="color:#888">(zoom in)</span>
   <div id="wkey"></div>
   <span class="dot" style="background:rgba(30,90,160,.75);border:2px solid #1e5aa0"></span>Reservoir storage<br>
   <span class="dot" style="background:none;border:2px solid #1e5aa0"></span>Reservoir capacity<br>  <span style="display:inline-block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #7b2d8b;vertical-align:middle;margin-right:8px"></span>Export pumping plant<br>
@@ -257,6 +258,40 @@ for(const a of D.arcs){
   pl.on('click',()=>openChart({kind:'arc',f:a}));
   pl.addTo(map); arcLayers.push(pl);
 }
+
+// ===== minor tributaries & distribution canals (zoom-gated) =====
+const MCOLORS={river:'#7fa8c9',canal:'#e5b285',bypass:'#8fc4c0'}; // muted versions of COLORS
+const MINOR_MINZOOM=9;
+const minorLayers=[]; let minorVisible=false;
+function minorWidth(q){ if(q==null||q<=0)return .4; return .5+3.5*Math.sqrt(Math.min(q,QREF)/QREF); }
+for(const a of (D.marcs||[])){
+  const latlngs=a.g.map(line=>line.map(p=>[p[1],p[0]]));
+  const pl=L.polyline(latlngs,{renderer:canvas,color:MCOLORS[a.c],weight:.8,opacity:.6});
+  pl.bindTooltip('',{sticky:true});
+  pl._arc=a;
+  pl.on('tooltipopen',()=>{
+    const q=a.q[cur];
+    pl.setTooltipContent('<b>'+a.n+'</b><br>'+a.i+'<br>Flow: '+fmt(q)+' cfs'+
+      (q==null?'':' ('+fmt(Math.round(cfsToTAF(q)*10)/10)+' TAF/month)')+
+      '<br><span style="color:#888">Click for 100-year record</span>');
+  });
+  pl.on('click',()=>openChart({kind:'arc',f:a}));
+  minorLayers.push(pl); // added to the map only at zoom >= MINOR_MINZOOM
+}
+function minorRestyle(i){
+  for(const pl of minorLayers){
+    const q=pl._arc.q[i];
+    pl.setStyle({weight:minorWidth(q), opacity:(q==null||q<=0)?.25:.6});
+  }
+}
+function minorUpdate(){
+  const show=map.getZoom()>=MINOR_MINZOOM;
+  if(show===minorVisible) return;
+  minorVisible=show;
+  for(const pl of minorLayers) show?pl.addTo(map):pl.remove();
+  if(show) minorRestyle(cur);
+}
+map.on('zoomend',minorUpdate);
 
 const CAPMAX=Math.max(...D.res.map(r=>r.cap));
 const RMAX=24;
@@ -493,6 +528,7 @@ function render(i){
     const q=pl._arc.q[i];
     pl.setStyle({weight:widthFor(q), opacity:(q==null||q<=0)?.35:.85});
   }
+  if(minorVisible) minorRestyle(i);
   for(const o of resLayers){
     const s=o.r.s[i];
     o.fillC.setRadius(s==null?0:radiusFor(s));

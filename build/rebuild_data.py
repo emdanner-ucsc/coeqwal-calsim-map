@@ -73,10 +73,16 @@ def rdp(pts, eps):
 
 # --- CSV header: case-insensitive variable map
 with open('s0020_coeqwal_calsim_output.csv') as f:
-    r = csv.reader(f); next(r); b = next(r)
+    r = csv.reader(f); next(r); b = next(r); cpart = next(r)
 up = {}
 for i,v in enumerate(b):
     if v.upper() not in up: up[v.upper()] = (v,i)
+# CHANNEL-flow columns only (same b-part can appear with other c-parts,
+# e.g. FLOW-MIN-INSTREAM); used for the minor-arc pass
+chanup = {}
+for i,v in enumerate(b):
+    if v.startswith('C_') and cpart[i]=='CHANNEL' and v.upper() not in chanup:
+        chanup[v.upper()] = (v,i)
 
 con = sqlite3.connect('20221103v2_cs3_cvhydroregion.gpkg')
 cur = con.cursor()
@@ -109,6 +115,34 @@ for cid, rname, geom in cur.execute('SELECT CalSim_ID, Riv_Name, geom FROM CS3_S
                     'll':[round(lon,5),round(lat,5)],'col':up[var][1]})
 print('arcs:', len(arcs), '(particles:', sum(1 for a in arcs if a.get('p')), ') res:', len(res))
 
+# --- minor arcs (zoom-gated tributaries & distribution canals, July 2026):
+# every remaining gpkg CH arc with a CHANNEL series in the CSV, kept if
+# mean flow > 100 cfs OR peak |flow| > 1000 cfs (filter applied after the
+# series read below). Steady tributaries pass on mean; seasonal canals on peak.
+MINOR_EXCLUDE = {'C_CHCGO'}  # virtual/closure arc: unnamed 90-byte stub with 22,000 cfs "flow"
+MINOR_SUBTYPE = {'ST':'river','CL':'canal','BP':'bypass','NS':'canal'}  # NS = tunnel/penstock
+selected = {a['i'].upper() for a in arcs}
+minor = []
+seen_minor = set()
+for name, arc_id, typ, sub, geom in cur.execute(
+        'SELECT NAME, Arc_ID, Type, Sub_Type, geom FROM CalSim3_Arcs_prj3310 WHERE Arc_ID IS NOT NULL'):
+    u = arc_id.upper()
+    if typ!='CH' or u in selected or u in seen_minor or u in MINOR_EXCLUDE or u not in chanup:
+        continue
+    seen_minor.add(u)
+    t, coords = read_wkb(wkb_from_gpkg(geom))
+    lines = coords if t=='MultiLineString' else [coords]
+    out=[]
+    for ln in lines:
+        s = rdp(ln,50)
+        xs,ys = zip(*s)
+        lon,lat = tr.transform(xs,ys)
+        out.append([[round(lo,5),round(la,5)] for lo,la in zip(lon,lat)])
+    cat = MINOR_SUBTYPE.get(sub) or ('canal' if 'canal' in (name or '').lower() else 'river')
+    minor.append({'i':arc_id,'n':name or ('Channel '+arc_id),'c':cat,'m':1,'g':out,
+                  'col':chanup[u][1]})
+print('minor candidates:', len(minor))
+
 # --- time series
 PUMPS = [
  {'var':'D_OMR027_CAA000','head_arc':'C_CAA000','n':'Banks Pumping Plant','sub':'State Water Project'},
@@ -116,7 +150,8 @@ PUMPS = [
 ]
 wytcol = up['WYT_SAC_'][1]
 for p in PUMPS: p['col'] = up[p['var'].upper()][1]
-cols = {a['col'] for a in arcs} | {r['col'] for r in res} | {wytcol} | {p['col'] for p in PUMPS}
+cols = {a['col'] for a in arcs} | {r['col'] for r in res} | {wytcol} | {p['col'] for p in PUMPS} \
+     | {a['col'] for a in minor}
 series = {c:[] for c in cols}
 months=[]
 with open('s0020_coeqwal_calsim_output.csv') as f:
@@ -130,6 +165,16 @@ with open('s0020_coeqwal_calsim_output.csv') as f:
 
 for a in arcs:
     a['q']=[None if v is None else round(v) for v in series[a['col']]]; del a['col']
+
+# hybrid filter for minor arcs (needs the series, hence here)
+marcs=[]
+for a in minor:
+    q=[None if v is None else round(v) for v in series[a['col']]]
+    vs=[v for v in q if v is not None]
+    if not vs: continue
+    if sum(vs)/len(vs) > 100 or max(abs(v) for v in vs) > 1000:
+        a['q']=q; del a['col']; marcs.append(a)
+print('minor arcs kept (mean>100 or peak>1000 cfs):', len(marcs))
 for rv in res:
     s=series[rv['col']]; del rv['col']
     rv['cap']=round(max(v for v in s if v is not None),1)
@@ -217,6 +262,6 @@ print('DU polygons:', len(dus), '| with deliveries:', sum(1 for d in dus if 'd' 
 peak = max((max(d['d']) for d in dus if 'd' in d))
 print('peak monthly delivery (TAF):', peak)
 
-json.dump({'months':months,'arcs':arcs,'res':res,'qref':qref,'wyt':wyt,'pumps':pumps,'dus':dus},
+json.dump({'months':months,'arcs':arcs,'marcs':marcs,'res':res,'qref':qref,'wyt':wyt,'pumps':pumps,'dus':dus},
           open('build/payload.json','w'), separators=(',',':'))
 import os; print('payload MB:', os.path.getsize('build/payload.json')/1e6)
