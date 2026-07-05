@@ -75,7 +75,7 @@ html = """<!DOCTYPE html>
   .sbar{margin:7px 0 9px}
   .sbar .lbl{font-size:12px;font-weight:600;margin-bottom:2px;display:flex;justify-content:space-between}
   .sbar .lbl span:last-child{color:#666;font-weight:500}
-  .sbar .track{display:flex;height:15px;border-radius:3px;overflow:hidden;background:#f4f4f4}
+  .sbar .track{display:flex;height:15px;border-radius:3px;overflow:hidden}
   .sbar .seg{height:100%}
   #skey{font-size:11px;color:#444;line-height:1.55;margin-top:4px}
   #skey .dot{width:9px;height:9px}
