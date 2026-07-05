@@ -735,6 +735,12 @@ function drawBars(){
   document.getElementById('skey').innerHTML=key;
 }
 function sRefresh(){ drawArrows(); drawBars(); }
+function sFit(){  // frame CA in the space right of the panel (or below it on phones)
+  const pnl=document.getElementById('simplepanel');
+  const narrow=window.innerWidth<700;
+  const padTL=narrow?[10,10]:[pnl.offsetWidth+28,10];
+  map.fitBounds(S_BOUNDS,{animate:false,paddingTopLeft:padTL,paddingBottomRight:[10,10]});
+}
 function setMode(simple){
   simpleOn=simple;
   document.body.classList.toggle('simple',simple);
@@ -748,7 +754,7 @@ function setMode(simple){
   if(simple){
     setPlaying(false); chartFeat=null; chartEl.style.display='none';
     for(const h of ia) h.disable();
-    map.fitBounds(S_BOUNDS,{animate:false});
+    sFit();
     sRefresh();
   }else{
     for(const h of ia) h.enable();
@@ -774,7 +780,7 @@ function setMode(simple){
 document.getElementById('detailgo').onclick=()=>setMode(false);
 document.getElementById('simplebtn').onclick=()=>setMode(true);
 document.getElementById('aboutbtn2').onclick=aboutShow;
-map.on('resize', ()=>{ if(simpleOn){ map.fitBounds(S_BOUNDS,{animate:false}); sRefresh(); } });
+map.on('resize', ()=>{ if(simpleOn){ sFit(); sRefresh(); } });
 setMode(location.hash!=='#detail');
 </script>
 </body>
