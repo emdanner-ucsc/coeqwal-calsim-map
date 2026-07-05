@@ -1,6 +1,7 @@
 import json
 
 payload = open('build/payload.json').read()
+simple = open('build/simple_payload.json').read()
 
 html = """<!DOCTYPE html>
 <html lang="en">
@@ -57,6 +58,36 @@ html = """<!DOCTYPE html>
   #aboutgo:hover{background:#12578d}
   #about .credits{font-size:11.5px;color:#666;border-top:1px solid #ddd;padding-top:8px;margin-top:12px}
   #aboutbtn{font-size:11px;padding:2px 9px;border-radius:10px;float:right;margin-left:8px}
+  /* ===== simple mode ===== */
+  body.simple #title,body.simple #ctrl,body.simple #legend{display:none}
+  body.simple #chart{display:none!important}
+  body.simple .leaflet-control-zoom{display:none}
+  #simplepanel{top:12px;left:12px;width:330px;max-width:92vw;display:none;
+               max-height:calc(100vh - 40px);overflow-y:auto}
+  body.simple #simplepanel{display:block}
+  #simplepanel h1{font-size:16px;margin:0 0 3px}
+  #simplepanel .sub{font-size:12px;color:#555;margin:0 0 6px}
+  #sseltitle{font-size:12.5px;font-weight:600;color:#1668a8;margin:6px 0 2px}
+  #wytbtns{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 4px}
+  #wytbtns button{font-size:11.5px;padding:3px 8px;border-radius:12px}
+  #wytbtns button.on{background:#1668a8;color:#fff;border-color:#1668a8}
+  #syearrow{font-size:12px;color:#555;margin:2px 0 4px}
+  .sbar{margin:7px 0 9px}
+  .sbar .lbl{font-size:12px;font-weight:600;margin-bottom:2px;display:flex;justify-content:space-between}
+  .sbar .lbl span:last-child{color:#666;font-weight:500}
+  .sbar .track{display:flex;height:15px;border-radius:3px;overflow:hidden;background:#f4f4f4}
+  .sbar .seg{height:100%}
+  #skey{font-size:11px;color:#444;line-height:1.55;margin-top:4px}
+  #skey .dot{width:9px;height:9px}
+  #detailgo{display:block;width:100%;margin-top:10px;font-size:13px;font-weight:600;
+            padding:7px 0;background:#1668a8;color:#fff;border:none}
+  #detailgo:hover{background:#12578d}
+  #simplebtn{position:absolute;z-index:1000;top:12px;right:12px;display:none;font-weight:600}
+  body.detailmode #simplebtn{display:block}
+  #sarrows{position:absolute;inset:0;pointer-events:none;z-index:600}
+  #sarrows polygon{pointer-events:auto}
+  #sarrows text.alab{font-size:12.5px;fill:#333;font-weight:600;text-anchor:middle}
+  #sarrows text.aval{font-size:11.5px;fill:#555;text-anchor:middle}
 </style>
 </head>
 <body>
@@ -115,6 +146,20 @@ html = """<!DOCTYPE html>
   <label style="cursor:pointer"><input type="checkbox" id="ptoggle" checked> Flow direction particles</label><br>
   <span style="color:#666">Timeline: year type (Wet&rarr;Critical)<br>+ total reservoir storage curve</span>
 </div>
+<div class="panel" id="simplepanel">
+  <button id="aboutbtn2" style="font-size:11px;padding:2px 9px;border-radius:10px;float:right;margin-left:8px">About</button>
+  <h1>Where the water goes</h1>
+  <p class="sub">Annual water balance of the Central Valley system, simulated by CalSim3
+     (COEQWAL scenario s0020). Arrow width &prop; water volume.</p>
+  <div id="wytbtns"></div>
+  <div id="syearrow">or a single year:
+    <select id="syear"><option value="">&mdash;</option></select></div>
+  <div id="sseltitle"></div>
+  <div id="sbars"></div>
+  <div id="skey"></div>
+  <button id="detailgo">Explore the detailed map &rarr;</button>
+</div>
+<button id="simplebtn" class="panel" style="padding:6px 14px">&larr; Big picture</button>
 <div id="aboutwrap">
   <div class="panel" id="about">
     <button id="aboutclose" title="Close">&times;</button>
@@ -155,6 +200,7 @@ html = """<!DOCTYPE html>
   </div>
 </div>
 <script id="data" type="application/json">__PAYLOAD__</script>
+<script id="sdata" type="application/json">__SIMPLE__</script>
 <script>
 const D = JSON.parse(document.getElementById('data').textContent);
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -401,7 +447,7 @@ strip.addEventListener('pointerdown', e=>{ strip.setPointerCapture(e.pointerId);
 strip.addEventListener('pointerup', ()=>{ strip.onpointermove=null; });
 window.addEventListener('resize', ()=>{ buildStrip(); updateStrip(cur); });
 
-let cur=0, playing=false, timer=null;
+let cur=0, playing=false, timer=null, simpleOn=false;
 const slider=document.getElementById('slider'), datebox=document.getElementById('datebox');
 
 function render(i){
@@ -536,7 +582,7 @@ function posAt(pa, t){
 }
 function ptick(){
   panim = requestAnimationFrame(ptick);
-  if(moving || !particlesOn) return;
+  if(moving || !particlesOn || simpleOn) return;
   // fade previous frame -> trails
   pctx.globalCompositeOperation='destination-out';
   pctx.fillStyle='rgba(0,0,0,0.14)';
@@ -572,11 +618,169 @@ document.getElementById('ptoggle').onchange = e=>{ particlesOn=e.target.checked;
 document.getElementById('dutoggle').onchange = e=>{ duOn=e.target.checked; duUpdate(); };
 reproject();
 ptick();
+
+// ===== simple mode (big-picture view) =====
+const SD = JSON.parse(document.getElementById('sdata').textContent);
+const S_BOUNDS = [[32.8,-124.6],[42.1,-114.3]];
+// arrow centerlines: cubic bezier control points (lon,lat) — hand-authored
+const S_ARROWS = {
+  sac:    {pts:[[-122.25,40.45],[-122.05,39.6],[-121.75,39.05],[-121.8,38.4]],
+           color:'#4a90c4', lt:.45, dl:[-58,0], name:'Sacramento'},
+  east:   {pts:[[-120.65,38.7],[-121.0,38.5],[-121.25,38.4],[-121.55,38.25]],
+           color:'#4a90c4', lt:.1, dl:[34,-12], name:'Eastside'},
+  sj:     {pts:[[-119.8,36.9],[-120.5,37.05],[-121.05,37.35],[-121.55,37.9]],
+           color:'#4a90c4', lt:.02, dl:[48,10], name:'San Joaquin'},
+  outflow:{pts:[[-122.05,38.05],[-122.3,38.02],[-122.55,37.88],[-123.1,37.5]],
+           color:'#2b6ca3', lt:.95, dl:[-14,34], name:'Delta outflow'},
+  swp:    {pts:[[-121.68,37.68],[-121.0,36.5],[-119.95,35.55],[-118.95,34.85]],
+           color:'#d97e2a', lt:.72, dl:[42,4], name:'SWP exports'},
+  cvp:    {pts:[[-121.55,37.6],[-121.35,37.2],[-121.1,36.95],[-120.7,36.7]],
+           color:'#a85d1c', lt:1, dl:[-26,30], name:'CVP exports'}
+};
+const S_ALL = (()=>{  // long-term mean, same shape as a composite
+  const o = {name:'All years', n:SD.years.length};
+  for(const g of ['arrows','sources','uses','outflow']){
+    o[g]={};
+    for(const k in SD.years[0][g])
+      o[g][k]=SD.years.reduce((s,y)=>s+y[g][k],0)/SD.years.length;
+  }
+  return o;
+})();
+let ssel = {t:'all'};
+function sdata(){
+  if(ssel.t==='wyt') return SD.composites[ssel.v];
+  if(ssel.t==='year') return SD.years.find(y=>y.wy===ssel.v);
+  return S_ALL;
+}
+const sarrsvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+sarrsvg.id='sarrows'; sarrsvg.style.display='none';
+map.getContainer().appendChild(sarrsvg);
+
+function sbez(p,t){ const u=1-t;
+  return [0,1].map(i=>u*u*u*p[0][i]+3*u*u*t*p[1][i]+3*u*t*t*p[2][i]+t*t*t*p[3][i]); }
+function sArrowPoly(ctrl,w,sc){
+  const n=48, pts=[]; for(let i=0;i<=n;i++) pts.push(sbez(ctrl,i/n));
+  const headLen=Math.min(Math.max(w*1.15,10*sc),24*sc);
+  let acc=0, cut=n;
+  for(let i=n;i>0;i--){ acc+=Math.hypot(pts[i-1][0]-pts[i][0],pts[i-1][1]-pts[i][1]);
+    if(acc>=headLen){ cut=i-1; break; } }
+  const body=pts.slice(0,cut+1), tip=pts[n];
+  const nrm=(i,arr)=>{ const a=arr[Math.max(i-1,0)], b=arr[Math.min(i+1,arr.length-1)];
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1; return [-dy/L,dx/L]; };
+  const left=[],right=[];
+  for(let i=0;i<body.length;i++){ const [nx,ny]=nrm(i,body), p=body[i];
+    left.push([p[0]+nx*w/2,p[1]+ny*w/2]); right.push([p[0]-nx*w/2,p[1]-ny*w/2]); }
+  const [nx,ny]=nrm(body.length-1,body), hb=body[body.length-1];
+  const hw=Math.min(w*.95,14*sc);
+  const poly=left.concat([[hb[0]+nx*(w/2+hw),hb[1]+ny*(w/2+hw)],tip,
+    [hb[0]-nx*(w/2+hw),hb[1]-ny*(w/2+hw)]],right.reverse());
+  return poly.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+}
+function drawArrows(){
+  if(!simpleOn) return;
+  const d=sdata(); if(!d) return;
+  const sz=map.getSize();
+  sarrsvg.setAttribute('width',sz.x); sarrsvg.setAttribute('height',sz.y);
+  const pA=map.latLngToContainerPoint([38,-121]), pB=map.latLngToContainerPoint([39,-121]);
+  const sc=(pA.y-pB.y)/55;           // scale relative to the mockup's 55 px/deg
+  const k=1.5*sc;                    // px of arrow width per maf
+  let out='';
+  for(const key in S_ARROWS){
+    const a=S_ARROWS[key], maf=d.arrows[key]/1000;
+    const w=Math.max(maf*k,2);
+    const ctrl=a.pts.map(pt=>{ const c=map.latLngToContainerPoint([pt[1],pt[0]]); return [c.x,c.y]; });
+    out+='<polygon points="'+sArrowPoly(ctrl,w,sc)+'" fill="'+a.color+'" fill-opacity=".82">'+
+         '<title>'+a.name+': '+maf.toFixed(1)+' maf</title></polygon>';
+    const lp=sbez(ctrl,a.lt), lx=lp[0]+a.dl[0]*sc, ly=lp[1]+a.dl[1]*sc;
+    out+='<text class="alab" x="'+lx.toFixed(0)+'" y="'+ly.toFixed(0)+'">'+a.name+'</text>'+
+         '<text class="aval" x="'+lx.toFixed(0)+'" y="'+(ly+13).toFixed(0)+'">'+maf.toFixed(1)+' maf</text>';
+  }
+  sarrsvg.innerHTML=out;
+}
+const S_SEGC = {rsac:'#4a90c4', rsj:'#74add1', stor:'#1e5aa0', ag:'#4a8c3b',
+  urban:'#8659a5', refuge:'#2e8b8b', losses:'#a5a5a5', req:'#3aa6a0', unc:'#9ec5e0'};
+function drawBars(){
+  const d=sdata(); if(!d) return;
+  const S=d.sources,U=d.uses,O=d.outflow, rel=S.storage_release;
+  const m=v=>(v/1000).toFixed(1);
+  document.getElementById('sseltitle').textContent =
+    ssel.t==='year' ? 'Water year '+d.wy+' — '+WYT_NAMES[d.wyt-1]
+                    : (ssel.t==='wyt' ? 'Average '+d.name+' year ('+d.n+' of '+SD.years.length+')'
+                                      : 'Average of all '+d.n+' years');
+  const src=[['Sacramento basin runoff',S.runoff_sac,S_SEGC.rsac],
+             ['San Joaquin basin runoff',S.runoff_sj,S_SEGC.rsj]];
+  if(rel>0) src.push(['Released from reservoirs',rel,S_SEGC.stor]);
+  const use=[['Farms (incl. Delta)',U.ag+U.in_delta,S_SEGC.ag],
+             ['Cities',U.urban,S_SEGC.urban],
+             ['Wildlife refuges',U.refuge,S_SEGC.refuge],
+             ['Losses & other',U.losses,S_SEGC.losses]];
+  if(rel<0) use.push(['Stored in reservoirs',-rel,S_SEGC.stor]);
+  const ofl=[['Required (environment)',O.required,S_SEGC.req],
+             ['Uncaptured (wet-year surplus)',O.uncaptured,S_SEGC.unc]];
+  const bars=[['Water sources',src],['Water uses',use],['Delta outflow',ofl]];
+  const bmax=Math.max(...bars.map(b=>b[1].reduce((s,x)=>s+x[1],0)));
+  let html='', key='';
+  for(const [name,segs] of bars){
+    const tot=segs.reduce((s,x)=>s+x[1],0);
+    html+='<div class="sbar"><div class="lbl"><span>'+name+'</span><span>'+m(tot)+' maf</span></div><div class="track">';
+    for(const [lab,v,col] of segs){
+      if(v<=0) continue;
+      html+='<div class="seg" style="width:'+(v/bmax*100).toFixed(2)+'%;background:'+col+
+            '" title="'+lab+': '+m(v)+' maf"></div>';
+      key+='<span class="dot" style="background:'+col+'"></span>'+lab+' ('+m(v)+')<br>';
+    }
+    html+='</div></div>';
+  }
+  document.getElementById('sbars').innerHTML=html;
+  document.getElementById('skey').innerHTML=key;
+}
+function sRefresh(){ drawArrows(); drawBars(); }
+function setMode(simple){
+  simpleOn=simple;
+  document.body.classList.toggle('simple',simple);
+  document.body.classList.toggle('detailmode',!simple);
+  for(const p of ['overlayPane','markerPane','shadowPane','tooltipPane','dupane']){
+    const el=map.getPane(p); if(el) el.style.display=simple?'none':'';
+  }
+  pcv.style.display=simple?'none':'';
+  sarrsvg.style.display=simple?'':'none';
+  const ia=[map.dragging,map.scrollWheelZoom,map.doubleClickZoom,map.touchZoom,map.boxZoom,map.keyboard];
+  if(simple){
+    setPlaying(false); chartFeat=null; chartEl.style.display='none';
+    for(const h of ia) h.disable();
+    map.fitBounds(S_BOUNDS,{animate:false});
+    sRefresh();
+  }else{
+    for(const h of ia) h.enable();
+    map.setView([38.3,-121.4],7,{animate:false});
+    pclear();
+  }
+}
+(function(){
+  const bb=document.getElementById('wytbtns'), sel=document.getElementById('syear');
+  const mk=(label,fn)=>{ const b=document.createElement('button'); b.textContent=label;
+    b.onclick=()=>{ fn(); sel.value=''; upd(b); }; bb.appendChild(b); return b; };
+  function upd(active){ for(const b of bb.children) b.classList.toggle('on',b===active); }
+  const ball=mk('All years',()=>{ ssel={t:'all'}; sRefresh(); });
+  for(let t=1;t<=5;t++) mk(WYT_NAMES[t-1],()=>{ ssel={t:'wyt',v:String(t)}; sRefresh(); });
+  ball.classList.add('on');
+  for(const y of SD.years){
+    const o=document.createElement('option'); o.value=y.wy;
+    o.textContent=y.wy+' ('+WYT_NAMES[y.wyt-1]+')'; sel.appendChild(o);
+  }
+  sel.onchange=()=>{ if(sel.value==='') return;
+    ssel={t:'year',v:+sel.value}; upd(null); sRefresh(); };
+})();
+document.getElementById('detailgo').onclick=()=>setMode(false);
+document.getElementById('simplebtn').onclick=()=>setMode(true);
+document.getElementById('aboutbtn2').onclick=aboutShow;
+map.on('resize', ()=>{ if(simpleOn){ map.fitBounds(S_BOUNDS,{animate:false}); sRefresh(); } });
+setMode(location.hash!=='#detail');
 </script>
 </body>
 </html>"""
 
-html = html.replace('__PAYLOAD__', payload)
+html = html.replace('__PAYLOAD__', payload).replace('__SIMPLE__', simple)
 open('CalSim3_water_map.html','w').write(html)
 import os
 print('HTML MB:', os.path.getsize('CalSim3_water_map.html')/1e6)
