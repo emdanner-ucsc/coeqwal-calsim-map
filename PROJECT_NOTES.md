@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 5, 2026 (evening) — simple mode ("Where the water goes") built, deployed, and refined: gray bar track removed, camera panel-aware and cropped to arrow extent (commits through `af1e8d1` — verify this one is pushed). GitHub Pages is live. Next up: About-panel sentence introducing the two views; region-90 confirmation; CARTO basemap licensing check; mobile pass (simple mode is the natural phone default).*
+*Last updated: July 5, 2026 (late evening) — About-panel two-views sentence added; mobile pass done (see below). Next up: region-90 confirmation (still pending with COEQWAL team); CARTO basemap licensing check; live phone check after next push.*
 
 ## What this is
 
@@ -55,12 +55,16 @@ Implemented as a mode of the existing map: lands in simple mode (URL hash `#deta
 1. **Second scenario comparison** — A/B toggle or difference view ("what if"), which is the point of COEQWAL. **Deferred (July 2026):** scenario data will move from large CSV exports to a database; hold until that connectivity exists rather than building CSV-merge plumbing that gets replaced. Design discussion so far favors phased approach: A/B toggle + dual-scenario click-charts first, difference view later.
 2. **Environmental context** — minimum-instream-flow requirement variables (`FLOW-MIN-INSTREAM` type) vs actual flow on key reaches; relevant to the salmon/ecological audience.
 3. ~~**About panel**~~ — **done July 5, 2026.** Auto-opens on load; compact single panel with "simulated, not observed" caveat, 6-item visual key, story-button nudge, COEQWAL/DWR/CARTO credits + repo link. Reopens via About button in title panel; closes via ×, Esc, backdrop click, or "Explore the map" button. Lives in `build/make_html.py` template (search `aboutwrap`).
-4. **Basemap licensing + mobile pass** — verify CARTO tile usage terms or self-host tiles for a public site; controls need a responsive layout for phones.
+4. **Basemap licensing** — verify CARTO tile usage terms or self-host tiles for a public site. (~~Mobile pass~~ done July 5, 2026 — see Mobile pass section; still needs a real-phone live check after push.)
 5. **Reservoir labels** at higher zoom levels for the major reservoirs.
 6. **Filter or cluster the smallest reservoirs** (many of the 62 are tiny high-Sierra pools that clutter at statewide zoom).
 7. **Video export** — render frames to MP4 for social media (or a Blender import pipeline for a 3D rendered version, given the Blender 5 workflow).
 8. **Groundwater pumping** (`GP_*` variables) as a complement to the surface-delivery choropleth.
 9. **Delta Cross Channel / additional Delta channels** if a future CSV export includes them.
+
+## Mobile pass (July 5, 2026, late evening)
+
+At ≤700px: simple mode becomes a **bottom sheet** (map on top ~45%, sheet max-height 52vh, legend collapsed behind a "Breakdown ▾" toggle; `sFit()` pads the camera by sheet height). Detailed mode gets a **compact header** (subtitle hidden, story buttons in a horizontal-scroll row, title clears the Big picture button), Leaflet zoom buttons hidden (pinch works), and the `#ctrl` row wraps so the month label no longer clips. **CSS gotcha:** the phone rules for `#simplepanel`/`#skeytoggle` live in a *second* media block at the END of the stylesheet — equal specificity, so source order against the base rules decides; putting them in the early media block silently loses. Verify with `python3 build/screenshot_mobile.py` (5 shots at 390×844) alongside the desktop harness. Not yet live-checked on a real phone (Chrome `resize_window` was a no-op on Eric's fullscreen/managed window — check live after next push).
 
 ## Screenshot verification harness (July 5, 2026)
 

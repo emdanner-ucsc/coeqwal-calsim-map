@@ -40,7 +40,21 @@ html = """<!DOCTYPE html>
   #wkey div.k{display:flex;align-items:center;gap:6px;margin:1px 0}
   #wkey .bar{background:#1668a8;border-radius:2px;width:26px}
   .leaflet-tooltip{font-size:12px}
-  @media (max-width:700px){#legend{display:none}}
+  @media (max-width:700px){
+    #legend{display:none}
+    /* detailed mode: compact header, clear of the Big picture button */
+    #title{left:8px;right:120px;top:8px;max-width:none;padding:8px 10px}
+    #title h1{font-size:13.5px}
+    #title p{display:none}
+    #stories{flex-wrap:nowrap!important;overflow-x:auto;padding-bottom:2px}
+    #stories button{white-space:nowrap}
+    #simplebtn{font-size:12px;padding:5px 10px}
+    .leaflet-control-zoom{display:none} /* pinch zoom on touch */
+    #ctrl{width:calc(100vw - 16px);bottom:8px;padding:8px 10px}
+    #ctrl .row{flex-wrap:wrap;gap:6px}
+    #datebox{font-size:15px;min-width:0;margin-left:auto;text-align:right}
+    #chart{top:8px;left:8px;right:8px;width:auto}
+  }
   #aboutwrap{position:fixed;inset:0;z-index:2000;background:rgba(15,25,40,.45);
              display:flex;align-items:center;justify-content:center;padding:16px}
   #about{position:relative;max-width:560px;max-height:88vh;overflow-y:auto;
@@ -78,6 +92,8 @@ html = """<!DOCTYPE html>
   .sbar .track{display:flex;height:15px;border-radius:3px;overflow:hidden}
   .sbar .seg{height:100%}
   #skey{font-size:11px;color:#444;line-height:1.55;margin-top:4px}
+  #skeytoggle{display:none;border:none;background:none;color:#1668a8;font-size:12px;
+              font-weight:600;padding:2px 0;margin-top:4px;text-align:left;width:100%}
   #skey .dot{width:9px;height:9px}
   #detailgo{display:block;width:100%;margin-top:10px;font-size:13px;font-weight:600;
             padding:7px 0;background:#1668a8;color:#fff;border:none}
@@ -88,6 +104,15 @@ html = """<!DOCTYPE html>
   #sarrows polygon{pointer-events:auto}
   #sarrows text.alab{font-size:12.5px;fill:#333;font-weight:600;text-anchor:middle}
   #sarrows text.aval{font-size:11.5px;fill:#555;text-anchor:middle}
+  /* simple mode on phones: bottom sheet, map on top (must come after the base
+     #simplepanel/#skeytoggle rules — equal specificity, source order decides) */
+  @media (max-width:700px){
+    #simplepanel{top:auto;bottom:0;left:0;right:0;width:auto;max-width:none;
+                 border-radius:14px 14px 0 0;max-height:52vh;padding:10px 14px}
+    #skeytoggle{display:block}
+    #skey{display:none}
+    #skey.open{display:block}
+  }
 </style>
 </head>
 <body>
@@ -156,6 +181,7 @@ html = """<!DOCTYPE html>
     <select id="syear"><option value="">&mdash;</option></select></div>
   <div id="sseltitle"></div>
   <div id="sbars"></div>
+  <button id="skeytoggle">Breakdown &#9662;</button>
   <div id="skey"></div>
   <button id="detailgo">Explore the detailed map &rarr;</button>
 </div>
@@ -166,7 +192,9 @@ html = """<!DOCTYPE html>
     <h2>A century of California water, animated</h2>
     <p>This map shows the Central Valley water system &mdash; the rivers, canals, and reservoirs
        that supply farms, cities, and wildlife refuges from Redding to Bakersfield &mdash;
-       month by month across 100 years.</p>
+       month by month across 100 years. The map opens with the big picture &mdash; where each
+       year&rsquo;s water comes from and where it goes &mdash; and one click takes you into the
+       detailed monthly map.</p>
     <div class="caveat"><p><b>Simulated, not observed.</b> Everything here is output from
        <b>CalSim3</b>, the planning model used by the California Department of Water Resources
        and the U.S. Bureau of Reclamation. This run (COEQWAL scenario s0020) replays the
@@ -739,7 +767,8 @@ function sFit(){  // frame CA in the space right of the panel (or below it on ph
   const pnl=document.getElementById('simplepanel');
   const narrow=window.innerWidth<700;
   const padTL=narrow?[10,10]:[pnl.offsetWidth+28,10];
-  map.fitBounds(S_BOUNDS,{animate:false,paddingTopLeft:padTL,paddingBottomRight:[10,10]});
+  const padBR=narrow?[10,pnl.offsetHeight+14]:[10,10]; // sheet sits at the bottom on phones
+  map.fitBounds(S_BOUNDS,{animate:false,paddingTopLeft:padTL,paddingBottomRight:padBR});
 }
 function setMode(simple){
   simpleOn=simple;
@@ -777,6 +806,11 @@ function setMode(simple){
   sel.onchange=()=>{ if(sel.value==='') return;
     ssel={t:'year',v:+sel.value}; upd(null); sRefresh(); };
 })();
+document.getElementById('skeytoggle').onclick=function(){
+  const open=document.getElementById('skey').classList.toggle('open');
+  this.innerHTML='Breakdown '+(open?'&#9652;':'&#9662;');
+  sFit();
+};
 document.getElementById('detailgo').onclick=()=>setMode(false);
 document.getElementById('simplebtn').onclick=()=>setMode(true);
 document.getElementById('aboutbtn2').onclick=aboutShow;
