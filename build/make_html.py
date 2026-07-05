@@ -339,12 +339,18 @@ for(const u of D.dus){
     poly.setTooltipContent('<b>'+DU_LABEL[u.k]+' service area '+u.i+'</b><br>'+body);
   });
   if(!u.gw) poly.on('click',()=>openChart({kind:'du',f:u}));
-  poly.addTo(map); duLayers.push({u,poly});
+  duLayers.push({u,poly}); // added to the map by duUpdate when visible
 }
 function duUpdate(){
-  duVisible = duOn && map.getZoom()>=8;
+  const want = duOn && map.getZoom()>=8;
+  if(want!==duVisible){
+    // add/remove rather than style to transparent: hidden polygons must not
+    // capture hover/clicks meant for the thin minor arcs beneath them
+    for(const o of duLayers) want?o.poly.addTo(map):o.poly.remove();
+    duVisible=want;
+  }
+  if(!duVisible) return;
   for(const o of duLayers){
-    if(!duVisible){ o.poly.setStyle({fillOpacity:0,opacity:0}); continue; }
     if(o.u.gw){ o.poly.setStyle({fillOpacity:.04,opacity:.35,dashArray:'3,4'}); continue; }
     const ft=o.u.d[cur]*1000/o.u.ac;
     o.poly.setStyle({fillOpacity:Math.min(.62,.62*ft/DEPTH_REF),opacity:.5,dashArray:null});
