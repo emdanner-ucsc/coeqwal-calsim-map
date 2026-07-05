@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 5, 2026 (late evening) — About-panel two-views sentence added; mobile pass done (see below). Next up: region-90 confirmation (still pending with COEQWAL team); CARTO basemap licensing check; live phone check after next push.*
+*Last updated: July 5, 2026 (session close) — shipped this session: About-panel two-views sentence; mobile pass (bottom sheet + compact header); 332 zoom-gated minor tributaries/canals; delivery-area toggle hover fix. **v1 feature freeze declared** (see Scope decision) — next phase is feedback from the COEQWAL team + first-time viewers. Still open: CARTO basemap licensing (before wide sharing); region-90 DU confirmation; real-phone check of the live site (6.5 MB page on cellular); reservoir labels + small-reservoir cleanup as pre-feedback polish candidates.*
 
 ## What this is
 
