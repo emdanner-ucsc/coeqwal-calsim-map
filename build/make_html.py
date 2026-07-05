@@ -621,7 +621,7 @@ ptick();
 
 // ===== simple mode (big-picture view) =====
 const SD = JSON.parse(document.getElementById('sdata').textContent);
-const S_BOUNDS = [[32.8,-124.6],[42.1,-114.3]];
+const S_BOUNDS = [[34.2,-124.2],[41.3,-117.8]];  // arrow composition extent, ~detailed-view domain
 // arrow centerlines: cubic bezier control points (lon,lat) — hand-authored
 const S_ARROWS = {
   sac:    {pts:[[-122.25,40.45],[-122.05,39.6],[-121.75,39.05],[-121.8,38.4]],
