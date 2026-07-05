@@ -40,11 +40,29 @@ html = """<!DOCTYPE html>
   #wkey .bar{background:#1668a8;border-radius:2px;width:26px}
   .leaflet-tooltip{font-size:12px}
   @media (max-width:700px){#legend{display:none}}
+  #aboutwrap{position:fixed;inset:0;z-index:2000;background:rgba(15,25,40,.45);
+             display:flex;align-items:center;justify-content:center;padding:16px}
+  #about{position:relative;max-width:560px;max-height:88vh;overflow-y:auto;
+         font-size:13.5px;line-height:1.5;padding:18px 22px}
+  #about h2{font-size:17px;margin:0 0 8px;padding-right:26px}
+  #about h3{font-size:12px;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:#1668a8}
+  #about p{margin:0 0 8px}
+  #about .caveat{background:#fdf6e3;border-left:3px solid #c9a227;padding:8px 10px;border-radius:4px;margin:0 0 8px}
+  #about .caveat p{margin:0}
+  #about .krow{display:flex;align-items:center;gap:9px;margin:5px 0}
+  #about .krow .sym{flex:0 0 36px;text-align:center}
+  #aboutclose{position:absolute;top:8px;right:10px;border:none;background:none;font-size:18px;color:#888;padding:0}
+  #aboutgo{display:block;margin:14px auto 2px;font-size:14px;font-weight:600;
+           padding:7px 24px;background:#1668a8;color:#fff;border:none}
+  #aboutgo:hover{background:#12578d}
+  #about .credits{font-size:11.5px;color:#666;border-top:1px solid #ddd;padding-top:8px;margin-top:12px}
+  #aboutbtn{font-size:11px;padding:2px 9px;border-radius:10px;float:right;margin-left:8px}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div class="panel" id="title">
+  <button id="aboutbtn">About</button>
   <h1>Central Valley Water Allocation &mdash; CalSim3</h1>
   <p>Monthly simulated channel flows and reservoir storage, Oct&nbsp;1921&ndash;Sep&nbsp;2021
      (COEQWAL scenario s0020). Line width &prop; flow; circle size &prop; storage.</p>
@@ -96,6 +114,45 @@ html = """<!DOCTYPE html>
   <span class="sw" style="background:#d62828;height:3px"></span>Particles: reversed flow<br>
   <label style="cursor:pointer"><input type="checkbox" id="ptoggle" checked> Flow direction particles</label><br>
   <span style="color:#666">Timeline: year type (Wet&rarr;Critical)<br>+ total reservoir storage curve</span>
+</div>
+<div id="aboutwrap">
+  <div class="panel" id="about">
+    <button id="aboutclose" title="Close">&times;</button>
+    <h2>A century of California water, animated</h2>
+    <p>This map shows the Central Valley water system &mdash; the rivers, canals, and reservoirs
+       that supply farms, cities, and wildlife refuges from Redding to Bakersfield &mdash;
+       month by month across 100 years.</p>
+    <div class="caveat"><p><b>Simulated, not observed.</b> Everything here is output from
+       <b>CalSim3</b>, the planning model used by the California Department of Water Resources
+       and the U.S. Bureau of Reclamation. This run (COEQWAL scenario s0020) replays the
+       weather of 1921&ndash;2021 under <i>today&rsquo;s</i> infrastructure and operating rules &mdash;
+       it shows how the current system would handle that century, not measurements of what
+       actually happened.</p></div>
+    <h3>How to read the map</h3>
+    <div class="krow"><span class="sym"><span class="sw" style="background:#1668a8;height:7px;width:30px"></span></span>
+      <span>Thicker lines carry more water: blue rivers, orange canals, teal flood bypasses.</span></div>
+    <div class="krow"><span class="sym"><span class="dot" style="background:rgba(30,90,160,.75);border:2px solid #1e5aa0;width:9px;height:9px;margin:0 1px 0 0"></span><span class="dot" style="background:none;border:2px solid #1e5aa0;width:13px;height:13px;margin:0"></span></span>
+      <span>Circles are reservoirs: the ring is total capacity, the filled center is water in storage right now.</span></div>
+    <div class="krow"><span class="sym"><span class="sw" style="background:#aaa;height:3px;width:13px;margin:0 2px 0 0"></span><span class="sw" style="background:#d62828;height:3px;width:13px;margin:0"></span></span>
+      <span>Moving dashes show which way water flows; <b style="color:#d62828">red</b> means the flow has reversed.</span></div>
+    <div class="krow"><span class="sym"><span style="display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid #7b2d8b"></span></span>
+      <span>Purple triangles are the two big Delta export pumping plants; they grow with pumping rate.</span></div>
+    <div class="krow"><span class="sym"><span class="dot" style="background:rgba(74,140,59,.55);border-radius:2px;margin:0 1px 0 0"></span><span class="dot" style="background:rgba(134,89,165,.55);border-radius:2px;margin:0"></span></span>
+      <span>Shaded areas (zoom in) are monthly water deliveries: green farms, purple cities, teal
+            refuges. Dashed outlines are areas the model supplies from groundwater.</span></div>
+    <div class="krow"><span class="sym"><span class="sw" style="background:linear-gradient(90deg,#2b6cb8,#c9a227,#b2182b);height:10px;width:30px"></span></span>
+      <span>The bottom strip colors each year from wet (blue) to critically dry (red); the dark
+            curve is total reservoir storage.</span></div>
+    <h3>Explore</h3>
+    <p>Press play or drag the timeline. Click any river, reservoir, or delivery area for its full
+       100-year record. New here? Try the four <b>story buttons</b> in the top-left panel &mdash;
+       each flies to a place and plays a moment worth watching.</p>
+    <button id="aboutgo">Explore the map &rarr;</button>
+    <div class="credits">Built by the <a href="https://coeqwal.berkeley.edu/" target="_blank" rel="noopener">COEQWAL
+       project</a>, a University of California collaboration on equitable water allocation.
+       Model: CalSim3 (DWR / USBR) &middot; Basemap &copy; OpenStreetMap contributors, tiles &copy; CARTO &middot;
+       <a href="https://github.com/emdanner-ucsc/coeqwal-calsim-map" target="_blank" rel="noopener">Code &amp; data</a></div>
+  </div>
 </div>
 <script id="data" type="application/json">__PAYLOAD__</script>
 <script>
@@ -412,6 +469,16 @@ function runStory(s){
     b.onclick=()=>runStory(s); box.appendChild(b);
   }
 })();
+
+// ===== about panel =====
+const aboutwrap=document.getElementById('aboutwrap');
+function aboutShow(){ aboutwrap.style.display='flex'; }
+function aboutHide(){ aboutwrap.style.display='none'; }
+document.getElementById('aboutbtn').onclick=aboutShow;
+document.getElementById('aboutclose').onclick=aboutHide;
+document.getElementById('aboutgo').onclick=aboutHide;
+aboutwrap.addEventListener('click',e=>{ if(e.target===aboutwrap) aboutHide(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') aboutHide(); });
 
 buildStrip();
 render(0);

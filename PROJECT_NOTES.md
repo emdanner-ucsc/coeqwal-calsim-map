@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 4, 2026 — repo created and pushed; scenario comparison deferred pending database connectivity. Next up: about panel or min-instream flows.*
+*Last updated: July 5, 2026 — about panel added (auto-opens on load; About button in title panel reopens; Esc/backdrop/Explore button dismiss). Website integration deferred pending team consultation. Next up: CARTO basemap licensing check, then mobile pass.*
 
 ## What this is
 
@@ -42,13 +42,22 @@ Flow-scaled river/canal/bypass lines (434 arcs); reservoir circles with capacity
 
 1. **Second scenario comparison** — A/B toggle or difference view ("what if"), which is the point of COEQWAL. **Deferred (July 2026):** scenario data will move from large CSV exports to a database; hold until that connectivity exists rather than building CSV-merge plumbing that gets replaced. Design discussion so far favors phased approach: A/B toggle + dual-scenario click-charts first, difference view later.
 2. **Environmental context** — minimum-instream-flow requirement variables (`FLOW-MIN-INSTREAM` type) vs actual flow on key reaches; relevant to the salmon/ecological audience.
-3. **About panel** — data source, scenario ID, "simulated, not observed" caveat, plain-language how-to-read guide. Important for public credibility before release.
+3. ~~**About panel**~~ — **done July 5, 2026.** Auto-opens on load; compact single panel with "simulated, not observed" caveat, 6-item visual key, story-button nudge, COEQWAL/DWR/CARTO credits + repo link. Reopens via About button in title panel; closes via ×, Esc, backdrop click, or "Explore the map" button. Lives in `build/make_html.py` template (search `aboutwrap`).
 4. **Basemap licensing + mobile pass** — verify CARTO tile usage terms or self-host tiles for a public site; controls need a responsive layout for phones.
 5. **Reservoir labels** at higher zoom levels for the major reservoirs.
 6. **Filter or cluster the smallest reservoirs** (many of the 62 are tiny high-Sierra pools that clutter at statewide zoom).
 7. **Video export** — render frames to MP4 for social media (or a Blender import pipeline for a 3D rendered version, given the Blender 5 workflow).
 8. **Groundwater pumping** (`GP_*` variables) as a complement to the surface-delivery choropleth.
 9. **Delta Cross Channel / additional Delta channels** if a future CSV export includes them.
+
+## Screenshot verification harness (July 5, 2026)
+
+The map can be visually verified headlessly (works in the Claude sandbox, no root needed):
+
+1. `bash build/sandbox_setup.sh` — once per environment: installs playwright + Chromium, builds a stub `libXdamage.so.1` (Chromium links it but never calls it headless).
+2. `LD_LIBRARY_PATH=$HOME/stublibs PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 python3 build/screenshot.py [outdir]` — writes three PNGs (about panel, statewide, Delta close-up at Oct 1976) and fails on any page error.
+
+Sandbox proxy blocks cdnjs/CARTO from inside the browser, so the harness serves Leaflet from `build/vendor/` (leaflet.js/css 1.9.4, vendored via npm) and aborts tile requests — gray background, all data layers render. In the sandbox, the stub lives at `/sessions/<name>/stublibs` (home dir doesn't persist between sessions; re-run setup each session).
 
 ## Verification history
 
