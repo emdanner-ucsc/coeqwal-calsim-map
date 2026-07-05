@@ -1,10 +1,14 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 4, 2026*
+*Last updated: July 4, 2026 — repo created and pushed; scenario comparison deferred pending database connectivity. Next up: about panel or min-instream flows.*
 
 ## What this is
 
 An interactive, single-file HTML map (`CalSim3_water_map.html`, ~4.9 MB) visualizing California's Central Valley water allocation system as simulated by CalSim3 (COEQWAL scenario s0020, L2020A), Oct 1921 – Sep 2021 monthly. Built for a public audience. Open in any browser; requires internet for the basemap tiles and Leaflet CDN.
+
+## Repository
+
+Public GitHub repo: https://github.com/emdanner-ucsc/coeqwal-calsim-map (personal account; commits as emdanner@ucsc.edu, set in repo-local git config). Committed: HTML map, `build/` scripts, `Shapefiles/`, README, these notes. Gitignored: the two ~270 MB source files and `build/*.json` intermediates (regeneration steps in README). GitHub Pages not yet enabled — flip on under Settings → Pages when ready to publish (consider adding the about panel first).
 
 ## Source data
 
