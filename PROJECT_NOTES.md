@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 5, 2026 — about panel added (auto-opens on load; About button in title panel reopens; Esc/backdrop/Explore button dismiss). Website integration deferred pending team consultation. Next up: CARTO basemap licensing check, then mobile pass.*
+*Last updated: July 5, 2026 (evening) — simple mode ("Where the water goes") built, deployed, and refined: gray bar track removed, camera panel-aware and cropped to arrow extent (commits through `af1e8d1` — verify this one is pushed). GitHub Pages is live. Next up: About-panel sentence introducing the two views; region-90 confirmation; CARTO basemap licensing check; mobile pass (simple mode is the natural phone default).*
 
 ## What this is
 
