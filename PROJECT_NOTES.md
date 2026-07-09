@@ -101,6 +101,35 @@ of this note if needed — computes pre-clamp residual per CSV).
 node --check; all three harnesses (desktop 6 shots, mobile 5, scenario-switch 5 with
 value assertions) pass with no page errors.
 
+## A/B comparison view — design brief (written July 8, 2026, NOT built; discuss first)
+
+Everything needed exists: static per-scenario JSONs, in-memory `scenCache`, frozen
+qref/capacity/particle scales (visual sizes already comparable), and `applyScenario()`
+which swaps series in place. Design direction from earlier discussions: **A/B toggle +
+dual-scenario click-charts first, difference view later.**
+
+Proposed minimal v1 (to discuss with Eric before building):
+1. **"Compare" affordance** in the scenario picker row: adds a scenario B (same
+   theme×hydrology picker UI); A/B pill buttons appear next to the month scrubber to
+   flip the whole map between the two (instant — both cached). Keeps one mental model
+   (the map always shows ONE scenario) and reuses applyScenario() untouched.
+2. **Click-charts show both:** when B is set, drawChart() overlays B's series as a second
+   line (A solid #1668a8, B dashed #e07b28?) + both values in the subtitle. This is where
+   real insight lives (e.g. Shasta storage under salmon flows vs baseline). Needs
+   `scenCache[bSid]` lookups keyed by feature id — data already keyed that way.
+3. **Simple mode:** bars for A and B side by side (two thin tracks per bar group) —
+   cheap and high-value; arrows stay A-only (two arrow sets is clutter).
+4. **Timeline strip:** draw B's storage curve as a second line (dashed) — WYT bands stay
+   A's (note this somewhere; comparing hist vs cc95 the year types differ).
+Difference view (flow deltas as red/blue line coloring, storage delta circles) is v2;
+decide after the toggle ships.
+
+Open design questions for Eric: (a) flip-the-map toggle vs side-by-side synced maps
+(recommend flip; side-by-side doubles particle/canvas cost and halves map size);
+(b) default B = same theme's other hydrology, or same hydrology's baseline? (once
+s0047/s0056 arrive, baseline-of-same-hydrology is the principled default);
+(c) does B persist across mode switches / URL hash so links can share a comparison?
+
 ## Minor arcs — zoom-gated tributaries & distribution canals (July 5, 2026)
 
 332 additional arcs (`marcs` payload key, `m:1` flag) drawn only at zoom ≥ 9 (`MINOR_MINZOOM`), muted colors (`MCOLORS`), ~half width scale, no particles, same tooltips/click-charts. Selection in `rebuild_data.py`: every gpkg CH arc with a CHANNEL series in the CSV not already on the map, kept if mean flow > 100 cfs OR peak |flow| > 1,000 cfs (mean catches steady tributaries, peak catches seasonal canals). Names from gpkg `NAME` (330/333 populated; fallback `Channel C_XXX`); river/canal/bypass class from `Sub_Type` (ST/CL/BP; NS=penstock→canal; NA→by name). **`C_CHCGO` is explicitly excluded** — unnamed 90-byte stub geometry with 22,000 cfs mean "flow", clearly a virtual/closure arc; check for others like it if the filter changes. CSV gotcha: the same `C_*` b-part appears under several c-parts (CHANNEL, FLOW-MIN-INSTREAM, DEBUG-CFS…) — minors use a c-part-filtered column map (`chanup`). `qref` is still computed from major arcs only, so major widths are unchanged. Payload 4.9→6.4 MB, HTML ~6.5 MB. Layers are added/removed from the map on `zoomend` (not style-toggled — canvas hit-testing follows automatically).
