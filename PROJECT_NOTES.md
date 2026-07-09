@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 8, 2026 (session close) — shipped: **multi-scenario support** (43 scenarios, theme × hydrology picker in both modes, lazy fetch, s0020 still embedded). Negative-residual issue RESOLVED via signed split: negative years now surface as an "Other inflows (net)" segment on the sources bar (Eric's call, option 1); bars balance exactly for all 43. All three headless harnesses pass. Still open: CC50/CC95 baseline CSVs (s0047, s0056) from team; ask team what physically closes the balance in the 3.1 no-min-flow runs; CARTO licensing; region-90 DU confirmation; real-phone check.*
+*Last updated: July 9, 2026 (session close) — shipped: **A/B comparison view** (flip toggle + dual click-charts + side-by-side simple-mode bars + dual storage curves on the strip + shareable hash links; all four v1 pieces, Eric's calls answered July 9). All three harnesses pass, scenario harness extended to 8 shots with A/B assertions. Still open: CC50/CC95 baseline CSVs (s0047, s0056) from team — once they land, revisit the defaultB() fallback so climate runs compare to their own baseline; ask team what physically closes the balance in the 3.1 no-min-flow runs; CARTO licensing; region-90 DU confirmation; real-phone check; difference view (v2).*
 
 ## What this is
 
@@ -101,34 +101,58 @@ of this note if needed — computes pre-clamp residual per CSV).
 node --check; all three harnesses (desktop 6 shots, mobile 5, scenario-switch 5 with
 value assertions) pass with no page errors.
 
-## A/B comparison view — design brief (written July 8, 2026, NOT built; discuss first)
+## A/B comparison view (BUILT July 9, 2026)
 
-Everything needed exists: static per-scenario JSONs, in-memory `scenCache`, frozen
-qref/capacity/particle scales (visual sizes already comparable), and `applyScenario()`
-which swaps series in place. Design direction from earlier discussions: **A/B toggle +
-dual-scenario click-charts first, difference view later.**
+Eric's design calls (July 9): **(a) flip-the-map toggle** (not side-by-side — full map
+size, half the particle/canvas cost); **(b) default B = same theme, other hydrology**
+(climate impact on the same policy; revisit toward baseline-of-same-hydrology once
+s0047/s0056 arrive); **(c) persist in BOTH mode switches and the URL hash** (shareable
+comparison links); all four v1 pieces in one session.
 
-Proposed minimal v1 (to discuss with Eric before building):
-1. **"Compare" affordance** in the scenario picker row: adds a scenario B (same
-   theme×hydrology picker UI); A/B pill buttons appear next to the month scrubber to
-   flip the whole map between the two (instant — both cached). Keeps one mental model
-   (the map always shows ONE scenario) and reuses applyScenario() untouched.
-2. **Click-charts show both:** when B is set, drawChart() overlays B's series as a second
-   line (A solid #1668a8, B dashed #e07b28?) + both values in the subtitle. This is where
-   real insight lives (e.g. Shasta storage under salmon flows vs baseline). Needs
-   `scenCache[bSid]` lookups keyed by feature id — data already keyed that way.
-3. **Simple mode:** bars for A and B side by side (two thin tracks per bar group) —
-   cheap and high-value; arrows stay A-only (two arrow sets is clutter).
-4. **Timeline strip:** draw B's storage curve as a second line (dashed) — WYT bands stay
-   A's (note this somewhere; comparing hist vs cc95 the year types differ).
+How it works — the map always shows ONE scenario (`shown` side); `applyScenario()`
+untouched. State `sidA`/`sidB`/`shown` (declared early, above recomputeStorage — the
+compare branch there must be reachable before the scenario section evaluates). Color
+language everywhere: **A = solid blue #1668a8, B = dashed orange #e07b28** (picker
+labels, hydrology pills, chart lines, strip curves, bar tracks, A/B pills).
+
+- **Picker**: "+ Compare" button in the picker header (both modes); B gets its own
+  theme×hydrology picker in a `.scenrowB` block; "× stop comparing" clears. Touching a
+  side's picker flips the map to that side. `defaultB()`: other hydrology of same theme
+  (hist→cc50 preference), else s0020, else 2.1|hist (when A *is* the baseline).
+- **Pills**: "MAP A|B" in the control row, "ARROWS A|B" in the simple panel — same
+  global flip (instant; both sides cached). `fetchScenario()` factored out of
+  selectScenario; cache eviction now protects s0020 + both sides in use.
+- **Click-charts**: `seriesOf(sid,kind,f)` reads BOTH sides from `scenCache` rather
+  than the live swapped-in-place feature; union axes; gap-aware line drawing; B's
+  climatology as a dashed step-line over A's bars; subtitle shows both values + sids.
+- **Strip**: solid = A, dashed orange = B; TSMAX spans both (frozen base floor kept).
+  **WYT bands stay the SHOWN side's** — hydrologies classify years differently; noted
+  in the strip's title tooltip.
+- **Simple mode**: two thin tracks per bar group, A/B totals in the group label, key
+  shows `label (A / B)` for the union of segments; caption "A sX vs B sY". A B-side
+  without simple data (USBR Alt3) degrades to A track + note; a SHOWN side without
+  simple data still triggers body.nosimple (pills stay visible to flip back).
+- **Hash**: `#detail&a=sX&b=sY&v=b` (plain `#detail` still works); replaceState, no
+  history spam; `hashReady` guard so init can't clobber incoming params before they're
+  parsed. **Gotcha: `setMode(simple)` takes SIMPLE** — passing `det` un-negated put
+  deep links in the wrong mode (caught by the harness, not by node --check).
+- `sdataOf(sid)` replaces computeSAll/S_ALL: applies the current wyt/year selection to
+  any scenario's simple payload; per-sid all-years means memoized in `sAllCache`.
+
+Harness #3 extended to 8 shots: compare-on picks default B, dual chart subtitle, pill
+flip re-verified against scenarios/*.json values, 6 thin tracks in simple mode,
+stop-comparing restore, and a deep comparison link reproduced from a cold load.
+Playwright gotchas: use `#scenrow1 > select` (the B picker doubles the selects inside
+each scenrow); top-level `let` isn't on `window` (evaluate bare names, not window.x);
+a hash-only `goto` is a same-document navigation — `goto('about:blank')` first to test
+deep links.
+
+Build note: `build/payload.json` is a gitignored intermediate; when the ~270 MB sources
+aren't on hand, regenerate it by extracting the `<script id="data">` block from the
+committed HTML (verified byte-identical round-trip against all three embedded payloads).
+
 Difference view (flow deltas as red/blue line coloring, storage delta circles) is v2;
-decide after the toggle ships.
-
-Open design questions for Eric: (a) flip-the-map toggle vs side-by-side synced maps
-(recommend flip; side-by-side doubles particle/canvas cost and halves map size);
-(b) default B = same theme's other hydrology, or same hydrology's baseline? (once
-s0047/s0056 arrive, baseline-of-same-hydrology is the principled default);
-(c) does B persist across mode switches / URL hash so links can share a comparison?
+decide after team feedback on the toggle.
 
 ## Minor arcs — zoom-gated tributaries & distribution canals (July 5, 2026)
 
@@ -140,7 +164,7 @@ Eric's call after the minor-arcs build: **no new data layers for now** — the m
 
 ## Remaining improvements (discussed, not yet built)
 
-1. **Second scenario comparison** — A/B toggle or difference view ("what if"), which is the point of COEQWAL. **Deferred (July 2026):** scenario data will move from large CSV exports to a database; hold until that connectivity exists rather than building CSV-merge plumbing that gets replaced. Design discussion so far favors phased approach: A/B toggle + dual-scenario click-charts first, difference view later.
+1. ~~**Second scenario comparison**~~ — **A/B toggle SHIPPED July 9, 2026** (see A/B comparison view section). Remaining: difference view (v2) after team feedback; revisit defaultB() once CC baselines (s0047/s0056) arrive.
 2. **Environmental context** — minimum-instream-flow requirement variables (`FLOW-MIN-INSTREAM` type) vs actual flow on key reaches; relevant to the salmon/ecological audience.
 3. ~~**About panel**~~ — **done July 5, 2026.** Auto-opens on load; compact single panel with "simulated, not observed" caveat, 6-item visual key, story-button nudge, COEQWAL/DWR/CARTO credits + repo link. Reopens via About button in title panel; closes via ×, Esc, backdrop click, or "Explore the map" button. Lives in `build/make_html.py` template (search `aboutwrap`).
 4. **Basemap licensing** — verify CARTO tile usage terms or self-host tiles for a public site. (~~Mobile pass~~ done July 5, 2026 — see Mobile pass section; still needs a real-phone live check after push.)
@@ -161,7 +185,7 @@ The map can be visually verified headlessly (works in the Claude sandbox, no roo
 1. `bash build/sandbox_setup.sh` — once per environment: installs playwright + Chromium, builds a stub `libXdamage.so.1` (Chromium links it but never calls it headless).
 2. `LD_LIBRARY_PATH=$HOME/stublibs PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 python3 build/screenshot.py [outdir]` — writes three PNGs (about panel, statewide, Delta close-up at Oct 1976) and fails on any page error.
 
-Sandbox proxy blocks cdnjs/CARTO from inside the browser, so the harness serves Leaflet from `build/vendor/` (leaflet.js/css 1.9.4, vendored via npm) and aborts tile requests — gray background, all data layers render. In the sandbox, the stub lives at `/sessions/<name>/stublibs` (home dir doesn't persist between sessions; re-run setup each session).
+Sandbox proxy blocks cdnjs/CARTO from inside the browser, so the harness serves Leaflet from `build/vendor/` (leaflet.js/css 1.9.4, vendored via npm) and aborts tile requests — gray background, all data layers render. In the sandbox, the stub lives at `/sessions/<name>/stublibs` (home dir doesn't persist between sessions; re-run setup each session). In the cloud (Cowork) environment none of that is needed: the playwright package and Chromium are preinstalled (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`) — the three harness scripts run directly.
 
 ## Verification history
 

@@ -9,6 +9,10 @@ Checks: picker present in both modes; switching to s0030 (hist) and s0091
 (cc95) swaps series (verified against scenarios/*.json), updates WYT strip
 and .cursid labels; a USBR Alt3 run (s0098) shows the no-simple notice in
 simple mode; switching back to s0020 restores embedded values exactly.
+A/B comparison: + Compare picks the default B, dual chart subtitle carries
+both sids, pills flip the map (values re-verified), simple mode renders two
+thin tracks per bar, stop-comparing restores single view, and a
+#detail&a=..&b=..&v=b link reproduces a comparison showing side B.
 """
 import json, os, sys, threading, functools, http.server
 from playwright.sync_api import sync_playwright
@@ -23,8 +27,12 @@ Handler.log_message = lambda *a, **k: None
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
+meta = json.load(open(os.path.join(ROOT, 'build', 'scenario_meta.json')))
+runof = {t['w'] + '|' + h: sid for t in meta['themes'] for h, sid in t['runs'].items()}
+DEF_B = runof['2.1|hist']   # default compare partner for the (hist-only) baseline
+
 exp = {sid: json.load(open(os.path.join(ROOT, 'scenarios', sid + '.json')))
-       for sid in ('s0020', 's0030', 's0091', 's0098')}
+       for sid in ('s0020', 's0030', 's0091', 's0098', DEF_B)}
 
 errors = []
 def onerr(e): errors.append(str(e))
@@ -62,12 +70,12 @@ with sync_playwright() as p:
     pg.keyboard.press('Escape')   # close the auto-opened about panel
     pg.wait_for_timeout(300)
 
-    assert pg.locator('#scenrow1 select').count() == 1, 'detail picker missing'
+    assert pg.locator('#scenrow1 > select').count() == 1, 'detail picker missing'
     v0 = arcq(pg, 'C_SAC003', 660)
     assert v0 == exp['s0020']['arcs']['C_SAC003'][660], f's0020 embed {v0}'
 
     # -- switch to 3.1 historical (s0030: no min flows)
-    pg.select_option('#scenrow1 select', '3.1')
+    pg.select_option('#scenrow1 > select', '3.1')
     wait_sid(pg, 's0030')
     v = arcq(pg, 'C_SAC003', 660)
     assert v == exp['s0030']['arcs']['C_SAC003'][660], f's0030 {v}'
@@ -76,7 +84,7 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{OUT}/1_s0030_detail.png')
 
     # -- same theme, severe climate (s0091)
-    pg.click('#scenrow1 .hydbtns button[data-h="cc95"]')
+    pg.click('#scenrow1 > .hydbtns button[data-h="cc95"]')
     wait_sid(pg, 's0091')
     v = arcq(pg, 'C_SAC003', 660)
     assert v == exp['s0091']['arcs']['C_SAC003'][660], f's0091 {v}'
@@ -91,7 +99,7 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{OUT}/3_s0091_simple.png')
 
     # -- USBR Alt3 run: simple mode must show the notice, not stale bars
-    pg.select_option('#scenrow2 select', '5.4')
+    pg.select_option('#scenrow2 > select', '5.4')
     wait_sid(pg, 's0098')
     assert pg.locator('#nosimplenote').is_visible(), 'no-simple notice missing'
     assert pg.evaluate('() => SD') is None, 'SD should be null'
@@ -99,12 +107,61 @@ with sync_playwright() as p:
 
     # -- back to baseline restores embedded data exactly
     pg.click('#detailgo')
-    pg.select_option('#scenrow1 select', '1.1')
+    pg.select_option('#scenrow1 > select', '1.1')
     wait_sid(pg, 's0020')
     v = arcq(pg, 'C_SAC003', 660)
     assert v == v0, f'restore mismatch {v} != {v0}'
     assert pg.evaluate('() => SD === SD0'), 'SD0 not restored'
     pg.screenshot(path=f'{OUT}/5_back_to_s0020.png')
+
+    # ===== A/B comparison =====
+    # + Compare on the baseline: default B = 2.1 hist (theme 1.1 has no other hydrology)
+    pg.click('#scenrow1 .cmpbtn')
+    pg.wait_for_function(f"() => sidB === '{DEF_B}'", timeout=20000)
+    pg.wait_for_timeout(400)
+    assert pg.evaluate("() => document.body.classList.contains('comparing')"), 'no comparing class'
+    assert 'b=' + DEF_B in pg.evaluate('() => location.hash'), 'hash missing b='
+    assert pg.evaluate('() => TSTORB && TSTORB.length') == 1200, 'strip B curve missing'
+
+    # dual click-chart: subtitle carries both sids and both values
+    pg.evaluate("() => openChart({kind:'arc', f: D.arcs.find(a=>a.i==='C_SAC003')})")
+    sub = pg.inner_text('#chartsub')
+    assert 's0020' in sub and DEF_B in sub and 'A ' in sub and 'B ' in sub, f'chart sub: {sub}'
+    pg.screenshot(path=f'{OUT}/6_compare_chart.png')
+
+    # pill flips the whole map to B (instant — cached); values must be B's
+    pg.click('#abpills1 button[data-s="B"]')
+    wait_sid(pg, DEF_B)
+    v = arcq(pg, 'C_SAC003', 660)
+    assert v == exp[DEF_B]['arcs']['C_SAC003'][660], f'B flip {v}'
+    assert 'v=b' in pg.evaluate('() => location.hash'), 'hash missing v=b'
+
+    # simple mode: two thin tracks per bar group, comparison caption present
+    pg.click('#simplebtn')
+    pg.wait_for_timeout(1200)
+    assert pg.locator('#sbars .track.thin').count() == 6, 'expected 6 thin tracks'
+    assert pg.locator('#sbars .cmpcap').count() == 1, 'comparison caption missing'
+    pg.screenshot(path=f'{OUT}/7_compare_simple.png')
+
+    # stop comparing (shown side was B) → back to single-scenario A
+    pg.click('#scenrow2 .cmpoff')
+    wait_sid(pg, 's0020')
+    assert pg.evaluate('() => sidB') is None, 'sidB not cleared'
+    assert not pg.evaluate("() => document.body.classList.contains('comparing')")
+    assert pg.locator('#sbars .track.thin').count() == 0, 'thin tracks remain'
+    assert 'b=' not in pg.evaluate('() => location.hash'), 'hash still has b='
+
+    # a comparison link reproduces the full state, showing side B
+    pg.goto('about:blank')   # force a real reload (hash-only goto is same-document)
+    pg.goto(f'http://127.0.0.1:{PORT}/CalSim3_water_map.html#detail&a=s0030&b=s0091&v=b')
+    pg.wait_for_timeout(1500)
+    pg.keyboard.press('Escape')
+    wait_sid(pg, 's0091')
+    assert pg.evaluate("() => sidA") == 's0030', 'link sidA'
+    assert pg.evaluate("() => sidB") == 's0091', 'link sidB'
+    v = arcq(pg, 'C_SAC003', 660)
+    assert v == exp['s0091']['arcs']['C_SAC003'][660], f'link shows B {v}'
+    pg.screenshot(path=f'{OUT}/8_compare_link.png')
 
     b.close()
 srv.shutdown()

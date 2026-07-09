@@ -50,6 +50,29 @@ html = """<!DOCTYPE html>
   .hydbtns button.on{background:#1668a8;color:#fff;border-color:#1668a8}
   .hydbtns button:disabled{opacity:.35;cursor:default}
   .scenrow .busy{font-size:11px;color:#b3541e;display:none;margin-top:3px}
+  /* ===== A/B compare ===== */
+  .scenhead{display:flex;justify-content:space-between;align-items:baseline}
+  .cmpbtn{font-size:11px;padding:1px 8px;border-radius:10px;color:#1668a8}
+  body.comparing .cmpbtn{display:none}
+  .scenrowB{display:none;border-top:1px dashed #ccc;margin-top:7px;padding-top:5px}
+  body.comparing .scenrowB{display:block}
+  .scenrowB label{color:#e07b28!important}
+  .scenrowB .hydbtns button.on{background:#e07b28;border-color:#e07b28}
+  .cmpoff{font-size:11px;border:none;background:none;color:#888;padding:0 2px;cursor:pointer}
+  .cmpoff:hover{color:#b2182b;background:none}
+  .abpills{display:none;gap:4px;align-items:center}
+  body.comparing .abpills{display:flex}
+  .abpills .ablab{font-size:10.5px;color:#666;text-transform:uppercase;letter-spacing:.03em}
+  .abpills button{font-size:12px;font-weight:700;padding:3px 11px;border-radius:12px}
+  .abpills button[data-s="A"].on{background:#1668a8;color:#fff;border-color:#1668a8}
+  .abpills button[data-s="B"].on{background:#e07b28;color:#fff;border-color:#e07b28}
+  #abpills2{margin:7px 0 0}
+  .cmpcap{font-size:11px;color:#555;margin:6px 0 2px}
+  .cmpcap b.ca{color:#1668a8} .cmpcap b.cb{color:#e07b28}
+  .sbar .trow{display:flex;align-items:center;gap:5px;margin-top:2px}
+  .sbar .tl{font-size:9.5px;font-weight:700;width:9px;flex:none}
+  .sbar .track.thin{height:9px;flex:1}
+  .sbar .na{font-size:10px;color:#999;flex:1}
   #nosimplenote{display:none;background:#fdf6e3;border-left:3px solid #c9a227;padding:8px 10px;
                 border-radius:4px;font-size:12.5px;margin:8px 0}
   body.nosimple #nosimplenote{display:block}
@@ -150,6 +173,7 @@ html = """<!DOCTYPE html>
     <button id="backy">&#8722;1y</button>
     <button id="fwdy">+1y</button>
     <div id="datebox"></div>
+    <div class="abpills" id="abpills1"><span class="ablab">Map</span></div>
     <select id="speed">
       <option value="1500">Slow</option>
       <option value="800" selected>Normal</option>
@@ -194,6 +218,7 @@ html = """<!DOCTYPE html>
   <p class="sub">Annual water balance of the Central Valley system, simulated by CalSim3
      (COEQWAL scenario <span class="cursid">s0020</span>). Arrow width &prop; water volume.</p>
   <div class="scenrow" id="scenrow2"></div>
+  <div class="abpills" id="abpills2"><span class="ablab">Arrows</span></div>
   <div id="nosimplenote"><b>No annual summary for this scenario.</b> The USBR Alt3 runs
      use a different model configuration that doesn't report basin inflows, so the
      big-picture water balance can't be computed. The detailed map has everything.</div>
@@ -222,7 +247,9 @@ html = """<!DOCTYPE html>
        1921&ndash;2021 &mdash; or a climate-changed version of it &mdash; under a chosen set of
        infrastructure and operating rules. The map opens with the baseline (scenario s0020,
        today&rsquo;s rules); the <b>scenario picker</b> switches to alternative policies and
-       climates. None of it is a measurement of what actually happened.</p></div>
+       climates, and <b>Compare</b> adds a second scenario &mdash; flip the map between the
+       two and see both on every chart. None of it is a measurement of what actually
+       happened.</p></div>
     <h3>How to read the map</h3>
     <div class="krow"><span class="sym"><span class="sw" style="background:#1668a8;height:7px;width:30px"></span></span>
       <span>Thicker lines carry more water: blue rivers, orange canals, teal flood bypasses.</span></div>
@@ -414,24 +441,39 @@ function setupCanvas(cv){
   return [c,w,h];
 }
 function niceMax(v){ const p=Math.pow(10,Math.floor(Math.log10(v||1))); return Math.ceil(v/p)*p; }
+// look up a feature's series in a cached scenario (compare mode reads BOTH
+// sides from scenCache rather than the live, swapped-in-place feature object)
+function seriesOf(sid, kind, f){
+  const sc=scenCache[sid]; if(!sc) return null;
+  const m = kind==='res'?sc.res : kind==='du'?sc.dus : kind==='pump'?sc.pumps : sc.arcs;
+  return m[f.i]||null;
+}
 function drawChart(){
   if(!chartFeat) return;
   const isRes = chartFeat.kind==='res', isDU = chartFeat.kind==='du', f=chartFeat.f;
-  const vals = isDU ? f.d : (isRes ? f.s : f.q);
   const unit = isRes ? 'TAF' : isDU ? 'TAF/mo' : 'cfs';
+  // A always solid blue, B always dashed orange, regardless of which the map shows
+  const vals  = sidB ? (seriesOf(sidA,chartFeat.kind,f)||[]) : (isDU ? f.d : (isRes ? f.s : f.q));
+  const valsB = sidB ? (seriesOf(sidB,chartFeat.kind,f)||[]) : null;
   document.getElementById('charttitle').textContent = isDU
     ? DU_LABEL[f.k]+' service area '+f.i+' — deliveries'
     : f.n + (isRes ? ' — storage' : chartFeat.kind==='pump' ? ' — Delta exports' : ' — flow');
   const v=vals[cur];
-  document.getElementById('chartsub').innerHTML = f.i+' &middot; '+D.months[cur]+': <b>'+fmt(v)+' '+unit+'</b>'+
-    (isRes||isDU||v==null?'':' ('+fmt(Math.round(cfsToTAF(v)*10)/10)+' TAF/mo)');
+  document.getElementById('chartsub').innerHTML = sidB
+    ? f.i+' &middot; '+D.months[cur]+': <b style="color:#1668a8">A '+fmt(v)+'</b> / '+
+      '<b style="color:#e07b28">B '+fmt(valsB[cur])+'</b> '+unit+
+      ' <span style="color:#999">(A '+sidA+' &middot; B '+sidB+')</span>'
+    : f.i+' &middot; '+D.months[cur]+': <b>'+fmt(v)+' '+unit+'</b>'+
+      (isRes||isDU||v==null?'':' ('+fmt(Math.round(cfsToTAF(v)*10)/10)+' TAF/mo)');
   // --- main: full record
   const [c,w,h]=setupCanvas(document.getElementById('chartmain'));
-  const vmax=niceMax(Math.max(...vals.filter(x=>x!=null)));
-  const vmin=Math.min(0,...vals.filter(x=>x!=null));
+  const finite=vals.filter(x=>x!=null).concat(valsB?valsB.filter(x=>x!=null):[]);
+  if(!finite.length){ c.clearRect(0,0,w,h); return; }
+  const vmax=niceMax(Math.max(...finite));
+  const vmin=Math.min(0,...finite);
   const yof=v=> h-14-(h-22)*((v-vmin)/(vmax-vmin||1));
   c.clearRect(0,0,w,h);
-  // wyt background bands (subtle)
+  // wyt background bands (subtle; the displayed scenario's year types)
   for(let k=0;k<D.wyt.length;k++){
     c.fillStyle=WYT_COLORS[D.wyt[k]-1]; c.globalAlpha=.13;
     c.fillRect(k/D.wyt.length*w,0,w/D.wyt.length+1,h-14);
@@ -440,12 +482,15 @@ function drawChart(){
   // zero line if negative values
   if(vmin<0){ c.strokeStyle='#999'; c.lineWidth=1; c.setLineDash([3,3]);
     c.beginPath(); c.moveTo(0,yof(0)); c.lineTo(w,yof(0)); c.stroke(); c.setLineDash([]); }
-  // series
-  c.strokeStyle= isRes?'#1e5aa0':'#1668a8'; c.lineWidth=1;
-  c.beginPath();
-  for(let i=0;i<vals.length;i++){ if(vals[i]==null) continue;
-    const x=(i+.5)/vals.length*w; i?c.lineTo(x,yof(vals[i])):c.moveTo(x,yof(vals[i])); }
-  c.stroke();
+  const line=(vv,color,dash)=>{
+    c.strokeStyle=color; c.lineWidth=1; c.setLineDash(dash||[]);
+    c.beginPath(); let pen=false;
+    for(let i=0;i<vv.length;i++){ if(vv[i]==null){ pen=false; continue; }
+      const x=(i+.5)/vv.length*w; pen?c.lineTo(x,yof(vv[i])):c.moveTo(x,yof(vv[i])); pen=true; }
+    c.stroke(); c.setLineDash([]);
+  };
+  line(vals, isRes?'#1e5aa0':'#1668a8');
+  if(valsB) line(valsB, '#e07b28', [4,3]);
   // capacity line for reservoirs
   if(isRes){ c.strokeStyle='#b2182b'; c.setLineDash([4,3]);
     c.beginPath(); c.moveTo(0,yof(f.cap)); c.lineTo(w,yof(f.cap)); c.stroke(); c.setLineDash([]); }
@@ -460,20 +505,32 @@ function drawChart(){
   c.beginPath(); c.moveTo(mx,0); c.lineTo(mx,h-14); c.stroke();
   // --- climatology: mean by calendar month (Oct-Sep)
   const [c2,w2,h2]=setupCanvas(document.getElementById('chartclim'));
-  const sums=Array(12).fill(0), cnts=Array(12).fill(0);
-  for(let i=0;i<vals.length;i++){ if(vals[i]!=null){ sums[i%12]+=vals[i]; cnts[i%12]++; } }
-  const means=sums.map((s,k)=>s/(cnts[k]||1));
-  const mmax=niceMax(Math.max(...means)), mmin=Math.min(0,...means);
+  const climOf=vv=>{
+    const sums=Array(12).fill(0), cnts=Array(12).fill(0);
+    for(let i=0;i<vv.length;i++){ if(vv[i]!=null){ sums[i%12]+=vv[i]; cnts[i%12]++; } }
+    return sums.map((s,k)=>cnts[k]?s/cnts[k]:null);
+  };
+  const means=climOf(vals), meansB=valsB?climOf(valsB):null;
+  const mfin=means.filter(x=>x!=null).concat(meansB?meansB.filter(x=>x!=null):[]);
+  const mmax=niceMax(Math.max(...mfin,0)), mmin=Math.min(0,...mfin);
   c2.clearRect(0,0,w2,h2);
   const LBL=['O','N','D','J','F','M','A','M','J','J','A','S'];
   const y2=v=> h2-13-(h2-20)*((v-mmin)/(mmax-mmin||1));
   for(let k=0;k<12;k++){
     const x=k/12*w2+3, bw=w2/12-6;
     c2.fillStyle = k===cur%12 ? '#e07b28' : '#9ec5e0';
-    const y0=y2(Math.max(0,mmin)), y1=y2(means[k]);
+    const y0=y2(Math.max(0,mmin)), y1=y2(means[k]==null?0:means[k]);
     c2.fillRect(x, Math.min(y0,y1), bw, Math.abs(y0-y1)||1);
     c2.fillStyle='#666'; c2.font='10px system-ui'; c2.textAlign='center';
     c2.fillText(LBL[k], x+bw/2, h2-2);
+  }
+  if(meansB){  // B climatology as a dashed step-line over A's bars
+    c2.strokeStyle='#c05f10'; c2.lineWidth=1.6; c2.setLineDash([4,3]);
+    c2.beginPath(); let pen=false;
+    for(let k=0;k<12;k++){ if(meansB[k]==null){ pen=false; continue; }
+      const x=k/12*w2+3+(w2/12-6)/2, y=y2(meansB[k]);
+      pen?c2.lineTo(x,y):c2.moveTo(x,y); pen=true; }
+    c2.stroke(); c2.setLineDash([]);
   }
   c2.textAlign='left'; c2.fillStyle='#666'; c2.fillText(fmt(Math.round(mmax))+' '+unit,3,10);
 }
@@ -490,12 +547,25 @@ function drawChart(){
 
 const WYT_NAMES=['Wet','Above Normal','Below Normal','Dry','Critical'];
 const WYT_COLORS=['#2b6cb8','#74add1','#c9a227','#e2703a','#b2182b'];
+// ===== A/B comparison state (scenario section wires the UI) =====
+// sidA/sidB are fixed sides; `shown` is which one the map currently displays.
+// Color language everywhere: A = solid blue #1668a8, B = dashed orange #e07b28.
+let sidA='s0020', sidB=null, shown='A';
 // total storage across mapped reservoirs, per month (recomputed per scenario;
 // TSMAX has a frozen floor at the base scenario's max so curves stay comparable)
-let TSTOR=[], TSMAX=1, TSMAX_BASE=null;
+let TSTOR=[], TSTORB=null, TSMAX=1, TSMAX_BASE=null;
 function recomputeStorage(){
-  TSTOR = D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=r.s[i]; if(v!=null) s+=v; } return s; });
-  const m = Math.max(...TSTOR);
+  // solid curve: A's storage when comparing, else the displayed scenario's
+  // (identical unless shown==='B'); dashed curve: B's.
+  TSTORB=null;
+  if(sidB && scenCache[sidA] && scenCache[sidB]){
+    const of=sid=>{ const R=scenCache[sid].res;
+      return D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=(R[r.i]||[])[i]; if(v!=null) s+=v; } return s; }); };
+    TSTOR=of(sidA); TSTORB=of(sidB);
+  }else{
+    TSTOR = D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=r.s[i]; if(v!=null) s+=v; } return s; });
+  }
+  const m = Math.max(...TSTOR, ...(TSTORB||[0]));
   if(TSMAX_BASE==null) TSMAX_BASE=m;
   TSMAX = Math.max(m, TSMAX_BASE);
 }
@@ -517,7 +587,7 @@ function buildStrip(){
     c.fillRect(k/nwy*w, 0, w/nwy+1, h);
   }
   c.globalAlpha = 1;
-  // total storage curve
+  // total storage curve (A / displayed scenario)
   c.strokeStyle='rgba(15,25,60,.85)'; c.lineWidth=1.4;
   c.beginPath();
   for(let i=0;i<TSTOR.length;i++){
@@ -525,6 +595,21 @@ function buildStrip(){
     i?c.lineTo(x,y):c.moveTo(x,y);
   }
   c.stroke();
+  // scenario B's storage curve, dashed orange (year-type bands stay the
+  // displayed scenario's — across hydrologies the classifications differ)
+  if(TSTORB){
+    c.strokeStyle='rgba(224,123,40,.95)'; c.lineWidth=1.4; c.setLineDash([5,4]);
+    c.beginPath();
+    for(let i=0;i<TSTORB.length;i++){
+      const x=(i+.5)/TSTORB.length*w, y=h-3-(h-8)*(TSTORB[i]/TSMAX);
+      i?c.lineTo(x,y):c.moveTo(x,y);
+    }
+    c.stroke(); c.setLineDash([]);
+  }
+  strip.title = sidB
+    ? 'Storage curves: solid = A ('+sidA+'), dashed = B ('+sidB+'). Year-type bands: '+
+      (shown==='B'?sidB:sidA)+' only.'
+    : 'Year type (Wet→Critical) + total reservoir storage';
 }
 function updateStrip(i){
   if(!stripBase) return;
@@ -738,25 +823,25 @@ const S_ARROWS = {
   cvp:    {pts:[[-121.55,37.6],[-121.35,37.2],[-121.1,36.95],[-120.7,36.7]],
            color:'#a85d1c', lt:1, dl:[-26,30], name:'CVP exports'}
 };
-let S_ALL = null;
-function computeSAll(){  // long-term mean, same shape as a composite
-  if(!SD){ S_ALL=null; return; }
-  const o = {name:'All years', n:SD.years.length};
-  for(const g of ['arrows','sources','uses','outflow']){
-    o[g]={};
-    for(const k in SD.years[0][g])
-      o[g][k]=SD.years.reduce((s,y)=>s+y[g][k],0)/SD.years.length;
-  }
-  S_ALL=o;
-}
-computeSAll();
 let ssel = {t:'all'};
-function sdata(){
-  if(!SD) return null;
-  if(ssel.t==='wyt') return SD.composites[ssel.v];
-  if(ssel.t==='year') return SD.years.find(y=>y.wy===ssel.v);
-  return S_ALL;
+const sAllCache = {};   // per-sid long-term means (payloads are immutable)
+function sdataOf(sid){  // current selection applied to a given scenario's simple payload
+  const sp = scenCache[sid] && scenCache[sid].simple;
+  if(!sp) return null;
+  if(ssel.t==='wyt') return sp.composites[ssel.v]||null;
+  if(ssel.t==='year') return sp.years.find(y=>y.wy===ssel.v)||null;
+  if(!sAllCache[sid]){
+    const o = {name:'All years', n:sp.years.length};
+    for(const g of ['arrows','sources','uses','outflow']){
+      o[g]={};
+      for(const k in sp.years[0][g])
+        o[g][k]=sp.years.reduce((s,y)=>s+y[g][k],0)/sp.years.length;
+    }
+    sAllCache[sid]=o;
+  }
+  return sAllCache[sid];
 }
+function sdata(){ return sdataOf(curSid); }
 const sarrsvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
 sarrsvg.id='sarrows'; sarrsvg.style.display='none';
 map.getContainer().appendChild(sarrsvg);
@@ -805,14 +890,8 @@ function drawArrows(){
 const S_SEGC = {rsac:'#4a90c4', rsj:'#74add1', stor:'#1e5aa0', ag:'#4a8c3b',
   urban:'#8659a5', refuge:'#2e8b8b', losses:'#a5a5a5', other:'#7f98ad',
   req:'#3aa6a0', unc:'#9ec5e0'};
-function drawBars(){
-  const d=sdata(); if(!d) return;
+function segsFor(d){  // [group name, [label, value, color][]] triples for one scenario
   const S=d.sources,U=d.uses,O=d.outflow, rel=S.storage_release;
-  const m=v=>(v/1000).toFixed(1);
-  document.getElementById('sseltitle').textContent =
-    ssel.t==='year' ? 'Water year '+d.wy+' — '+WYT_NAMES[d.wyt-1]
-                    : (ssel.t==='wyt' ? 'Average '+d.name+' year ('+d.n+' of '+SD.years.length+')'
-                                      : 'Average of all '+d.n+' years');
   const src=[['Sacramento basin runoff',S.runoff_sac,S_SEGC.rsac],
              ['San Joaquin basin runoff',S.runoff_sj,S_SEGC.rsj]];
   if(rel>0) src.push(['Released from reservoirs',rel,S_SEGC.stor]);
@@ -824,19 +903,72 @@ function drawBars(){
   if(rel<0) use.push(['Stored in reservoirs',-rel,S_SEGC.stor]);
   const ofl=[['Required (environment)',O.required,S_SEGC.req],
              ['Uncaptured (wet-year surplus)',O.uncaptured,S_SEGC.unc]];
-  const bars=[['Water sources',src],['Water uses',use],['Delta outflow',ofl]];
-  const bmax=Math.max(...bars.map(b=>b[1].reduce((s,x)=>s+x[1],0)));
-  let html='', key='';
-  for(const [name,segs] of bars){
-    const tot=segs.reduce((s,x)=>s+x[1],0);
-    html+='<div class="sbar"><div class="lbl"><span>'+name+'</span><span>'+m(tot)+' maf</span></div><div class="track">';
-    for(const [lab,v,col] of segs){
-      if(v<=0) continue;
-      html+='<div class="seg" style="width:'+(v/bmax*100).toFixed(2)+'%;background:'+col+
-            '" title="'+lab+': '+m(v)+' maf"></div>';
-      key+='<span class="dot" style="background:'+col+'"></span>'+lab+' ('+m(v)+')<br>';
+  return [['Water sources',src],['Water uses',use],['Delta outflow',ofl]];
+}
+function trackHtml(segs,bmax,cls){
+  let t='<div class="track'+(cls||'')+'">';
+  for(const [lab,v,col] of segs){
+    if(v<=0) continue;
+    t+='<div class="seg" style="width:'+(v/bmax*100).toFixed(2)+'%;background:'+col+
+       '" title="'+lab+': '+(v/1000).toFixed(1)+' maf"></div>';
+  }
+  return t+'</div>';
+}
+function drawBars(){
+  const m=v=>(v/1000).toFixed(1);
+  const titleOf=d=>
+    ssel.t==='year' ? 'Water year '+d.wy+' — '+WYT_NAMES[d.wyt-1]
+                    : (ssel.t==='wyt' ? 'Average '+d.name+' year'+(sidB?'':' ('+d.n+' of '+SD.years.length+')')
+                                      : 'Average of all '+(sidB?'':d.n+' ')+'years');
+  if(!sidB){                       // ===== single scenario (unchanged behavior)
+    const d=sdata(); if(!d) return;
+    document.getElementById('sseltitle').textContent = titleOf(d);
+    const bars=segsFor(d);
+    const bmax=Math.max(...bars.map(b=>b[1].reduce((s,x)=>s+x[1],0)));
+    let html='', key='';
+    for(const [name,segs] of bars){
+      const tot=segs.reduce((s,x)=>s+x[1],0);
+      html+='<div class="sbar"><div class="lbl"><span>'+name+'</span><span>'+m(tot)+' maf</span></div>'+
+            trackHtml(segs,bmax);
+      for(const [lab,v,col] of segs) if(v>0)
+        key+='<span class="dot" style="background:'+col+'"></span>'+lab+' ('+m(v)+')<br>';
+      html+='</div>';
     }
-    html+='</div></div>';
+    document.getElementById('sbars').innerHTML=html;
+    document.getElementById('skey').innerHTML=key;
+    return;
+  }
+  // ===== comparing: one thin track per scenario in each group =====
+  const dA=sdataOf(sidA), dB=sdataOf(sidB);
+  const d0=dA||dB; if(!d0) return;   // shown side lacking simple data is handled by nosimple
+  document.getElementById('sseltitle').textContent = titleOf(d0);
+  const cap='<div class="cmpcap"><b class="ca">A '+sidA+'</b> vs <b class="cb">B '+sidB+'</b>'+
+            (dA&&dB?'':' — '+(dA?sidB:sidA)+' has no annual summary for this selection')+'</div>';
+  const barsA=dA?segsFor(dA):null, barsB=dB?segsFor(dB):null;
+  const bmax=Math.max(...[barsA,barsB].filter(Boolean).flatMap(bs=>bs.map(b=>b[1].reduce((s,x)=>s+x[1],0))));
+  let html=cap, key='';
+  for(let g=0;g<3;g++){
+    const name=(barsA||barsB)[g][0];
+    const totA=barsA?barsA[g][1].reduce((s,x)=>s+x[1],0):null;
+    const totB=barsB?barsB[g][1].reduce((s,x)=>s+x[1],0):null;
+    html+='<div class="sbar"><div class="lbl"><span>'+name+'</span><span>'+
+          '<b style="color:#1668a8">'+(totA==null?'–':m(totA))+'</b> / '+
+          '<b style="color:#e07b28">'+(totB==null?'–':m(totB))+'</b> maf</span></div>';
+    html+='<div class="trow"><span class="tl" style="color:#1668a8">A</span>'+
+          (barsA?trackHtml(barsA[g][1],bmax,' thin'):'<span class="na">no data</span>')+'</div>';
+    html+='<div class="trow"><span class="tl" style="color:#e07b28">B</span>'+
+          (barsB?trackHtml(barsB[g][1],bmax,' thin'):'<span class="na">no data</span>')+'</div>';
+    html+='</div>';
+    // key: union of segment labels, A / B values side by side
+    const labs=[], seen={};
+    for(const bs of [barsA,barsB]) if(bs)
+      for(const [lab,v,col] of bs[g][1]) if(v>0 && !seen[lab]){ seen[lab]=col; labs.push(lab); }
+    for(const lab of labs){
+      const vA=barsA&&(barsA[g][1].find(x=>x[0]===lab)||[])[1];
+      const vB=barsB&&(barsB[g][1].find(x=>x[0]===lab)||[])[1];
+      key+='<span class="dot" style="background:'+seen[lab]+'"></span>'+lab+
+           ' ('+(vA>0?m(vA):'–')+' / '+(vB>0?m(vB):'–')+')<br>';
+    }
   }
   document.getElementById('sbars').innerHTML=html;
   document.getElementById('skey').innerHTML=key;
@@ -870,6 +1002,7 @@ function setMode(simple){
     pclear();
     buildStrip(); updateStrip(cur);  // strip has zero size while hidden in simple mode
   }
+  updateHash();  // hoisted from the scenario section; no-op until hashReady
 }
 let buildYearSel=null, updateWytUI=null, resetWytSel=null;
 (function(){
@@ -944,7 +1077,7 @@ function applyScenario(data){
   D.wyt = data.wyt;
   SD = data.simple;
   document.body.classList.toggle('nosimple', !SD);
-  computeSAll(); buildYearSel(); updateWytUI();
+  buildYearSel(); updateWytUI();
   if(ssel.t!=='all' && (!SD || (ssel.t==='wyt' && !SD.composites[ssel.v]) ||
      (ssel.t==='year' && !SD.years.find(y=>y.wy===ssel.v)))) resetWytSel();
   recomputeStorage(); buildStrip();
@@ -954,9 +1087,105 @@ function applyScenario(data){
 }
 
 const pickers=[];
-function buildPicker(container){
-  const lab=document.createElement('label'); lab.textContent='Scenario';
-  const sel=document.createElement('select'); sel.title='Choose a management scenario';
+async function fetchScenario(sid){   // resolve a sid to cached data (shared busy UI)
+  if(scenCache[sid]) return scenCache[sid];
+  fetching=true;
+  for(const p of pickers){ p.busy.style.display='block'; p.sel.disabled=true; }
+  try{
+    const rsp=await fetch(SCEN_DIR+sid+'.json');
+    if(!rsp.ok) throw new Error('HTTP '+rsp.status);
+    scenCache[sid]=await rsp.json();
+    const keep=new Set(['s0020',sid,sidA,sidB]);   // never evict a side in use
+    const extra=Object.keys(scenCache).filter(k=>!keep.has(k));
+    while(extra.length>4) delete scenCache[extra.shift()];  // cap memory
+    for(const p of pickers){ p.busy.style.display='none'; p.sel.disabled=false; }
+    return scenCache[sid];
+  }catch(e){
+    for(const p of pickers){
+      p.sel.disabled=false;
+      p.busy.textContent = location.protocol==='file:'
+        ? 'Other scenarios need the map served from its folder (with scenarios/) over http — or use the web version.'
+        : 'Could not load scenario data — check your connection.';
+      p.busy.style.display='block';
+    }
+    setTimeout(()=>{ for(const p of pickers){ p.busy.style.display='none';
+      p.busy.textContent='Loading scenario…'; } }, 6000);
+    throw e;
+  }finally{ fetching=false; }
+}
+function refreshCompareViews(){   // everything that overlays B without flipping the map
+  recomputeStorage(); buildStrip(); updateStrip(cur);
+  if(chartFeat) drawChart();
+  if(simpleOn) sRefresh();
+}
+function showSide(side){          // flip the whole map to one side (both are cached)
+  shown = sidB ? side : 'A';
+  curSid = shown==='B' ? sidB : sidA;
+  applyScenario(scenCache[curSid]);
+  syncPickers(); syncPills(); updateHash();
+}
+async function selectScenario(sid, side){
+  side = side||'A';
+  if(!sid || sid===(side==='B'?sidB:sidA) || fetching) return;
+  try{ await fetchScenario(sid); }catch(e){ syncPickers(); return; }
+  if(side==='B') sidB=sid; else sidA=sid;
+  showSide(side);                 // touching a side's picker shows that side
+}
+function defaultB(){              // same theme, other hydrology (Eric, July 2026)
+  const [w,h]=themeOf[sidA];
+  const pref = h==='hist' ? ['cc50','cc95'] : ['hist', h==='cc50'?'cc95':'cc50'];
+  for(const k of pref){ const s=runOf[w+'|'+k]; if(s) return s; }
+  if(sidA!=='s0020') return 's0020';        // single-hydrology theme: vs baseline
+  return runOf['2.1|hist'];                 // baseline itself: vs first policy theme
+}
+async function setCompare(sid){
+  if(fetching || !sid || sid===sidA) return;
+  try{ await fetchScenario(sid); }catch(e){ return; }
+  sidB=sid;
+  document.body.classList.add('comparing');
+  refreshCompareViews(); syncPickers(); syncPills(); updateHash();
+}
+function clearCompare(){
+  if(!sidB) return;
+  const wasB = shown==='B';
+  sidB=null; shown='A';
+  document.body.classList.remove('comparing');
+  if(wasB) showSide('A'); else{ refreshCompareViews(); updateHash(); }
+  syncPickers(); syncPills();
+}
+// --- A/B pill groups (control bar + simple panel)
+const pillGroups=[];
+function buildPills(container){
+  for(const s of ['A','B']){
+    const b=document.createElement('button'); b.dataset.s=s; b.textContent=s;
+    b.onclick=()=>{ if(sidB && shown!==s) showSide(s); };
+    container.appendChild(b);
+  }
+  pillGroups.push(container);
+}
+function syncPills(){
+  for(const g of pillGroups) for(const b of g.querySelectorAll('button')){
+    b.classList.toggle('on', b.dataset.s===shown);
+    b.title='Show scenario '+b.dataset.s+' ('+(b.dataset.s==='A'?sidA:(sidB||'–'))+') on the map';
+  }
+}
+function buildPicker(container, side){
+  const head=document.createElement('div'); head.className='scenhead';
+  const lab=document.createElement('label');
+  lab.textContent = side==='B' ? 'Scenario B' : 'Scenario';
+  head.appendChild(lab);
+  if(side==='A'){
+    const cb=document.createElement('button'); cb.className='cmpbtn';
+    cb.textContent='+ Compare'; cb.title='Add a second scenario to compare against';
+    cb.onclick=()=>setCompare(defaultB());
+    head.appendChild(cb);
+  }else{
+    const xb=document.createElement('button'); xb.className='cmpoff';
+    xb.innerHTML='&times; stop comparing'; xb.onclick=clearCompare;
+    head.appendChild(xb);
+  }
+  const sel=document.createElement('select');
+  sel.title = side==='B' ? 'Scenario to compare against' : 'Choose a management scenario';
   for(const f in SCEN.families){
     const g=document.createElement('optgroup'); g.label=SCEN.families[f];
     let any=false;
@@ -971,23 +1200,25 @@ function buildPicker(container){
     const b=document.createElement('button'); b.dataset.h=h;
     b.textContent=HYD_SHORT[h]||h; b.title=SCEN.hyd[h]+' hydrology';
     b.onclick=()=>{ if(b.disabled) return;
-      selectScenario(runOf[sel.value+'|'+h]); };
+      selectScenario(runOf[sel.value+'|'+h], side); };
     hb.appendChild(b);
   }
   sel.onchange=()=>{
-    const curHyd=themeOf[curSid][1];
+    const curHyd=themeOf[side==='B'?(sidB||sidA):sidA][1];
     const h = runOf[sel.value+'|'+curHyd] ? curHyd
             : Object.keys(SCEN.hyd).find(k=>runOf[sel.value+'|'+k]);
-    selectScenario(runOf[sel.value+'|'+h]);
+    selectScenario(runOf[sel.value+'|'+h], side);
   };
   const busy=document.createElement('div'); busy.className='busy';
   busy.textContent='Loading scenario…';
-  container.append(lab, sel, hb, busy);
-  pickers.push({sel, hb, busy});
+  container.append(head, sel, hb, busy);
+  pickers.push({sel, hb, busy, side});
 }
 function syncPickers(){
-  const [w,h]=themeOf[curSid];
   for(const p of pickers){
+    const sid = p.side==='B' ? sidB : sidA;
+    if(!sid) continue;                      // hidden B picker while not comparing
+    const [w,h]=themeOf[sid];
     p.sel.value=w;
     for(const b of p.hb.children){
       b.classList.toggle('on', b.dataset.h===h);
@@ -995,42 +1226,51 @@ function syncPickers(){
     }
   }
 }
-async function selectScenario(sid){
-  if(!sid || sid===curSid || fetching) return;
-  if(!scenCache[sid]){
-    fetching=true;
-    for(const p of pickers){ p.busy.style.display='block'; p.sel.disabled=true; }
-    try{
-      const rsp=await fetch(SCEN_DIR+sid+'.json');
-      if(!rsp.ok) throw new Error('HTTP '+rsp.status);
-      scenCache[sid]=await rsp.json();
-      const extra=Object.keys(scenCache).filter(k=>k!=='s0020'&&k!==sid);
-      while(extra.length>4) delete scenCache[extra.shift()];  // cap memory
-    }catch(e){
-      fetching=false;
-      for(const p of pickers){
-        p.sel.disabled=false;
-        p.busy.textContent = location.protocol==='file:'
-          ? 'Other scenarios need the map served from its folder (with scenarios/) over http — or use the web version.'
-          : 'Could not load scenario data — check your connection.';
-        p.busy.style.display='block';
-      }
-      setTimeout(()=>{ for(const p of pickers){ p.busy.style.display='none';
-        p.busy.textContent='Loading scenario…'; } }, 6000);
-      syncPickers(); return;
-    }
-    fetching=false;
-    for(const p of pickers){ p.busy.style.display='none'; p.sel.disabled=false; }
-  }
-  curSid=sid;
-  applyScenario(scenCache[sid]);
-  syncPickers();
+for(const id of ['scenrow1','scenrow2']){
+  const row=document.getElementById(id);
+  buildPicker(row,'A');
+  const bwrap=document.createElement('div'); bwrap.className='scenrowB';
+  buildPicker(bwrap,'B');
+  row.appendChild(bwrap);
 }
-buildPicker(document.getElementById('scenrow1'));
-buildPicker(document.getElementById('scenrow2'));
-syncPickers();
+buildPills(document.getElementById('abpills1'));
+buildPills(document.getElementById('abpills2'));
+syncPickers(); syncPills();
 
-setMode(location.hash!=='#detail');
+// ===== URL hash: mode + scenario A/B, so links reproduce a comparison =====
+// #detail            → detailed mode (backward compatible)
+// #a=s0030&b=s0020   → comparison; v=b means the map is showing side B
+let hashReady=false;
+function updateHash(){
+  if(!hashReady) return;
+  const parts=[];
+  if(!simpleOn) parts.push('detail');
+  if(sidA!=='s0020') parts.push('a='+sidA);
+  if(sidB){ parts.push('b='+sidB); if(shown==='B') parts.push('v=b'); }
+  history.replaceState(null,'', parts.length ? '#'+parts.join('&')
+                                             : location.pathname+location.search);
+}
+(function(){
+  const P={}; let det=false;
+  for(const t of location.hash.replace(/^#/,'').split('&')){
+    if(t==='detail'){ det=true; continue; }
+    const i=t.indexOf('='); if(i>0) P[t.slice(0,i)]=t.slice(i+1);
+  }
+  setMode(!det);   // setMode(simple)
+  (async()=>{
+    try{
+      if(P.a && themeOf[P.a] && P.a!==sidA){
+        await fetchScenario(P.a);
+        sidA=P.a; showSide('A');
+      }
+      if(P.b && themeOf[P.b] && P.b!==sidA){
+        await setCompare(P.b);
+        if(P.v==='b' && sidB) showSide('B');
+      }
+    }catch(e){ /* fetch-failure message already shown by fetchScenario */ }
+    hashReady=true; updateHash();
+  })();
+})();
 </script>
 </body>
 </html>"""
