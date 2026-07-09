@@ -2,8 +2,11 @@
 s0020_coeqwal_calsim_output.csv
 *.gpkg
 
-# Regenerable build intermediates
+# Regenerable build intermediates (scenario_meta.json is a build INPUT — keep it)
 build/*.json
+!build/scenario_meta.json
+build/__pycache__/
+build/shots*/
 
 # OS
 .DS_Store

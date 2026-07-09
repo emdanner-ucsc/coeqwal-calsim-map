@@ -117,9 +117,10 @@ def main():
         losses = sources - sum(sect.values()) - A['NET_DICU'] - A['NDOI']
         tier2 = A['DELTAINFLOWFORNDOI'] - A['DELTAEXPORTFORNDOI'] - A['NET_DICU'] - A['NDOI']
         assert abs(tier2) < 500, f'WY{year}: tier-2 residual {tier2:.0f} TAF'
-        # residual may dip slightly negative in extreme wet years (net return
-        # flows); allow up to 2% of sources, clamp to 0 for display
-        assert losses > -0.02 * sources, f'WY{year}: negative losses {losses:.0f} TAF'
+        # A negative residual = unaccounted net inflow; shown on the sources
+        # bar ('other') rather than clamped away. Kept in sync with
+        # build_scenario.py, where it matters for the 3.1 no-min-flow family.
+        other = max(-losses, 0.0)
         losses = max(losses, 0.0)
         years.append({
             'wy': year, 'wyt': int(series[simple_idx['WYT_SAC_']][mm[-1]]),
@@ -128,7 +129,7 @@ def main():
                        'outflow': A['NDOI'], 'swp': A['D_OMR027_CAA000'],
                        'cvp': A['D_OMR028_DMC000']},
             'sources': {'runoff_sac': A['I_SACBASIN'], 'runoff_sj': A['I_SJRBASIN'],
-                        'storage_release': release},
+                        'storage_release': release, 'other': other},
             'uses': {'ag': sect['ag'], 'urban': sect['urban'], 'refuge': sect['refuge'],
                      'in_delta': A['NET_DICU'], 'losses': losses},
             'outflow': {'required': required, 'uncaptured': A['NDOI'] - required},

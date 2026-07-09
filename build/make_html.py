@@ -2,6 +2,7 @@ import json
 
 payload = open('build/payload.json').read()
 simple = open('build/simple_payload.json').read()
+scenmeta = open('build/scenario_meta.json').read()
 
 html = """<!DOCTYPE html>
 <html lang="en">
@@ -40,6 +41,20 @@ html = """<!DOCTYPE html>
   #wkey div.k{display:flex;align-items:center;gap:6px;margin:1px 0}
   #wkey .bar{background:#1668a8;border-radius:2px;width:26px}
   .leaflet-tooltip{font-size:12px}
+  /* ===== scenario picker ===== */
+  .scenrow{margin-top:7px;font-size:12px}
+  .scenrow label{font-weight:600;color:#1668a8;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .scenrow select{width:100%;margin-top:2px;font-size:12px}
+  .hydbtns{display:flex;gap:4px;margin-top:4px}
+  .hydbtns button{font-size:11.5px;padding:3px 8px;border-radius:12px;flex:1;white-space:nowrap}
+  .hydbtns button.on{background:#1668a8;color:#fff;border-color:#1668a8}
+  .hydbtns button:disabled{opacity:.35;cursor:default}
+  .scenrow .busy{font-size:11px;color:#b3541e;display:none;margin-top:3px}
+  #nosimplenote{display:none;background:#fdf6e3;border-left:3px solid #c9a227;padding:8px 10px;
+                border-radius:4px;font-size:12.5px;margin:8px 0}
+  body.nosimple #nosimplenote{display:block}
+  body.nosimple #wytbtns,body.nosimple #syearrow,body.nosimple #sseltitle,
+  body.nosimple #sbars,body.nosimple #skey,body.nosimple #skeytoggle{display:none}
   @media (max-width:700px){
     #legend{display:none}
     /* detailed mode: compact header, clear of the Big picture button */
@@ -121,7 +136,8 @@ html = """<!DOCTYPE html>
   <button id="aboutbtn">About</button>
   <h1>Central Valley Water Allocation &mdash; CalSim3</h1>
   <p>Monthly simulated channel flows and reservoir storage, Oct&nbsp;1921&ndash;Sep&nbsp;2021
-     (COEQWAL scenario s0020). Line width &prop; flow; circle size &prop; storage.</p>
+     (COEQWAL scenario <span class="cursid">s0020</span>). Line width &prop; flow; circle size &prop; storage.</p>
+  <div class="scenrow" id="scenrow1"></div>
   <div id="stories" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px"></div>
   <div id="storyblurb" style="font-size:12px;color:#333;margin-top:6px;display:none;
        border-left:3px solid #e07b28;padding-left:8px"></div>
@@ -176,7 +192,11 @@ html = """<!DOCTYPE html>
   <button id="aboutbtn2" style="font-size:11px;padding:2px 9px;border-radius:10px;float:right;margin-left:8px">About</button>
   <h1>Where the water goes</h1>
   <p class="sub">Annual water balance of the Central Valley system, simulated by CalSim3
-     (COEQWAL scenario s0020). Arrow width &prop; water volume.</p>
+     (COEQWAL scenario <span class="cursid">s0020</span>). Arrow width &prop; water volume.</p>
+  <div class="scenrow" id="scenrow2"></div>
+  <div id="nosimplenote"><b>No annual summary for this scenario.</b> The USBR Alt3 runs
+     use a different model configuration that doesn't report basin inflows, so the
+     big-picture water balance can't be computed. The detailed map has everything.</div>
   <div id="wytbtns"></div>
   <div id="syearrow">or a single year:
     <select id="syear"><option value="">&mdash;</option></select></div>
@@ -198,10 +218,11 @@ html = """<!DOCTYPE html>
        detailed monthly map.</p>
     <div class="caveat"><p><b>Simulated, not observed.</b> Everything here is output from
        <b>CalSim3</b>, the planning model used by the California Department of Water Resources
-       and the U.S. Bureau of Reclamation. This run (COEQWAL scenario s0020) replays the
-       weather of 1921&ndash;2021 under <i>today&rsquo;s</i> infrastructure and operating rules &mdash;
-       it shows how the current system would handle that century, not measurements of what
-       actually happened.</p></div>
+       and the U.S. Bureau of Reclamation. Each COEQWAL scenario replays the weather of
+       1921&ndash;2021 &mdash; or a climate-changed version of it &mdash; under a chosen set of
+       infrastructure and operating rules. The map opens with the baseline (scenario s0020,
+       today&rsquo;s rules); the <b>scenario picker</b> switches to alternative policies and
+       climates. None of it is a measurement of what actually happened.</p></div>
     <h3>How to read the map</h3>
     <div class="krow"><span class="sym"><span class="sw" style="background:#1668a8;height:7px;width:30px"></span></span>
       <span>Thicker lines carry more water: blue rivers, orange canals, teal flood bypasses.</span></div>
@@ -230,6 +251,7 @@ html = """<!DOCTYPE html>
 </div>
 <script id="data" type="application/json">__PAYLOAD__</script>
 <script id="sdata" type="application/json">__SIMPLE__</script>
+<script id="scenmeta" type="application/json">__SCENMETA__</script>
 <script>
 const D = JSON.parse(document.getElementById('data').textContent);
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -468,14 +490,22 @@ function drawChart(){
 
 const WYT_NAMES=['Wet','Above Normal','Below Normal','Dry','Critical'];
 const WYT_COLORS=['#2b6cb8','#74add1','#c9a227','#e2703a','#b2182b'];
-// total storage across mapped reservoirs, per month
-const TSTOR = D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=r.s[i]; if(v!=null) s+=v; } return s; });
-const TSMAX = Math.max(...TSTOR);
+// total storage across mapped reservoirs, per month (recomputed per scenario;
+// TSMAX has a frozen floor at the base scenario's max so curves stay comparable)
+let TSTOR=[], TSMAX=1, TSMAX_BASE=null;
+function recomputeStorage(){
+  TSTOR = D.months.map((_,i)=>{ let s=0; for(const r of D.res){ const v=r.s[i]; if(v!=null) s+=v; } return s; });
+  const m = Math.max(...TSTOR);
+  if(TSMAX_BASE==null) TSMAX_BASE=m;
+  TSMAX = Math.max(m, TSMAX_BASE);
+}
+recomputeStorage();
 const strip = document.getElementById('strip');
 let stripBase=null;
 function buildStrip(){
   const dpr = window.devicePixelRatio||1;
   const w = strip.clientWidth, h = strip.clientHeight;
+  if(!w){ stripBase=null; return; }  // #ctrl hidden (simple mode); rebuilt on mode switch
   strip.width=w*dpr; strip.height=h*dpr;
   stripBase = document.createElement('canvas');
   stripBase.width=w*dpr; stripBase.height=h*dpr;
@@ -690,7 +720,8 @@ reproject();
 ptick();
 
 // ===== simple mode (big-picture view) =====
-const SD = JSON.parse(document.getElementById('sdata').textContent);
+const SD0 = JSON.parse(document.getElementById('sdata').textContent);
+let SD = SD0;   // swapped per scenario; null when the scenario lacks simple-mode data
 const S_BOUNDS = [[34.2,-124.2],[41.3,-117.8]];  // arrow composition extent, ~detailed-view domain
 // arrow centerlines: cubic bezier control points (lon,lat) — hand-authored
 const S_ARROWS = {
@@ -707,17 +738,21 @@ const S_ARROWS = {
   cvp:    {pts:[[-121.55,37.6],[-121.35,37.2],[-121.1,36.95],[-120.7,36.7]],
            color:'#a85d1c', lt:1, dl:[-26,30], name:'CVP exports'}
 };
-const S_ALL = (()=>{  // long-term mean, same shape as a composite
+let S_ALL = null;
+function computeSAll(){  // long-term mean, same shape as a composite
+  if(!SD){ S_ALL=null; return; }
   const o = {name:'All years', n:SD.years.length};
   for(const g of ['arrows','sources','uses','outflow']){
     o[g]={};
     for(const k in SD.years[0][g])
       o[g][k]=SD.years.reduce((s,y)=>s+y[g][k],0)/SD.years.length;
   }
-  return o;
-})();
+  S_ALL=o;
+}
+computeSAll();
 let ssel = {t:'all'};
 function sdata(){
+  if(!SD) return null;
   if(ssel.t==='wyt') return SD.composites[ssel.v];
   if(ssel.t==='year') return SD.years.find(y=>y.wy===ssel.v);
   return S_ALL;
@@ -748,7 +783,7 @@ function sArrowPoly(ctrl,w,sc){
 }
 function drawArrows(){
   if(!simpleOn) return;
-  const d=sdata(); if(!d) return;
+  const d=sdata(); if(!d){ sarrsvg.innerHTML=''; return; }
   const sz=map.getSize();
   sarrsvg.setAttribute('width',sz.x); sarrsvg.setAttribute('height',sz.y);
   const pA=map.latLngToContainerPoint([38,-121]), pB=map.latLngToContainerPoint([39,-121]);
@@ -768,7 +803,8 @@ function drawArrows(){
   sarrsvg.innerHTML=out;
 }
 const S_SEGC = {rsac:'#4a90c4', rsj:'#74add1', stor:'#1e5aa0', ag:'#4a8c3b',
-  urban:'#8659a5', refuge:'#2e8b8b', losses:'#a5a5a5', req:'#3aa6a0', unc:'#9ec5e0'};
+  urban:'#8659a5', refuge:'#2e8b8b', losses:'#a5a5a5', other:'#7f98ad',
+  req:'#3aa6a0', unc:'#9ec5e0'};
 function drawBars(){
   const d=sdata(); if(!d) return;
   const S=d.sources,U=d.uses,O=d.outflow, rel=S.storage_release;
@@ -780,6 +816,7 @@ function drawBars(){
   const src=[['Sacramento basin runoff',S.runoff_sac,S_SEGC.rsac],
              ['San Joaquin basin runoff',S.runoff_sj,S_SEGC.rsj]];
   if(rel>0) src.push(['Released from reservoirs',rel,S_SEGC.stor]);
+  if(S.other>50) src.push(['Other inflows (net)',S.other,S_SEGC.other]);
   const use=[['Farms (incl. Delta)',U.ag+U.in_delta,S_SEGC.ag],
              ['Cities',U.urban,S_SEGC.urban],
              ['Wildlife refuges',U.refuge,S_SEGC.refuge],
@@ -831,20 +868,36 @@ function setMode(simple){
     for(const h of ia) h.enable();
     map.setView([38.3,-121.4],7,{animate:false});
     pclear();
+    buildStrip(); updateStrip(cur);  // strip has zero size while hidden in simple mode
   }
 }
+let buildYearSel=null, updateWytUI=null, resetWytSel=null;
 (function(){
   const bb=document.getElementById('wytbtns'), sel=document.getElementById('syear');
   const mk=(label,fn)=>{ const b=document.createElement('button'); b.textContent=label;
     b.onclick=()=>{ fn(); sel.value=''; upd(b); }; bb.appendChild(b); return b; };
   function upd(active){ for(const b of bb.children) b.classList.toggle('on',b===active); }
   const ball=mk('All years',()=>{ ssel={t:'all'}; sRefresh(); });
-  for(let t=1;t<=5;t++) mk(WYT_NAMES[t-1],()=>{ ssel={t:'wyt',v:String(t)}; sRefresh(); });
-  ball.classList.add('on');
-  for(const y of SD.years){
-    const o=document.createElement('option'); o.value=y.wy;
-    o.textContent=y.wy+' ('+WYT_NAMES[y.wyt-1]+')'; sel.appendChild(o);
+  for(let t=1;t<=5;t++){
+    const b=mk(WYT_NAMES[t-1],()=>{ ssel={t:'wyt',v:String(t)}; sRefresh(); });
+    b.dataset.t=String(t);
   }
+  ball.classList.add('on');
+  buildYearSel=function(){
+    sel.innerHTML='<option value="">&mdash;</option>';
+    if(!SD) return;
+    for(const y of SD.years){
+      const o=document.createElement('option'); o.value=y.wy;
+      o.textContent=y.wy+' ('+WYT_NAMES[y.wyt-1]+')'; sel.appendChild(o);
+    }
+  };
+  buildYearSel();
+  updateWytUI=function(){  // a scenario's hydrology may have no years of some type
+    for(const b of bb.children)
+      if(b.dataset.t) b.disabled = !(SD && SD.composites[b.dataset.t]);
+  };
+  updateWytUI();
+  resetWytSel=function(){ ssel={t:'all'}; sel.value=''; upd(ball); };
   sel.onchange=()=>{ if(sel.value==='') return;
     ssel={t:'year',v:+sel.value}; upd(null); sRefresh(); };
 })();
@@ -857,12 +910,133 @@ document.getElementById('detailgo').onclick=()=>setMode(false);
 document.getElementById('simplebtn').onclick=()=>setMode(true);
 document.getElementById('aboutbtn2').onclick=aboutShow;
 map.on('resize', ()=>{ if(simpleOn){ sFit(); sRefresh(); } });
+
+// ===== scenario switching =====
+// Feature geometry is fixed; a scenario swap only replaces the time series
+// (arcs q, res s, pumps q, dus d, wyt, simple-mode payload) and re-renders.
+// qref / capacity rings / particle speed scale stay frozen from the base
+// scenario so widths and circle sizes are visually comparable across scenarios.
+const SCEN = JSON.parse(document.getElementById('scenmeta').textContent);
+const SCEN_DIR = 'scenarios/';
+const HYD_SHORT = {hist:'Historical', cc50:'Moderate CC', cc95:'Severe CC'};
+let curSid = 's0020', fetching = false;
+const scenCache = { s0020: (()=>{   // snapshot of the embedded default
+  const o={sid:'s0020',wyt:D.wyt,arcs:{},res:{},pumps:{},dus:{},simple:SD0};
+  for(const a of D.arcs) o.arcs[a.i]=a.q;
+  for(const a of (D.marcs||[])) o.arcs[a.i]=a.q;
+  for(const r of D.res) o.res[r.i]=r.s;
+  for(const p of D.pumps) o.pumps[p.i]=p.q;
+  for(const u of D.dus) if(u.d) o.dus[u.i]=u.d;
+  return o;
+})() };
+const runOf={}, themeOf={};
+for(const t of SCEN.themes) for(const h in t.runs){
+  runOf[t.w+'|'+h]=t.runs[h]; themeOf[t.runs[h]]=[t.w,h];
+}
+const NULLQ = D.months.map(()=>null), ZEROD = D.months.map(()=>0);
+
+function applyScenario(data){
+  for(const a of D.arcs) a.q = data.arcs[a.i]||NULLQ;
+  for(const a of (D.marcs||[])) a.q = data.arcs[a.i]||NULLQ;
+  for(const r of D.res) r.s = data.res[r.i]||NULLQ;
+  for(const p of D.pumps) p.q = data.pumps[p.i]||NULLQ;
+  for(const u of D.dus) if(u.d) u.d = data.dus[u.i]||ZEROD;
+  D.wyt = data.wyt;
+  SD = data.simple;
+  document.body.classList.toggle('nosimple', !SD);
+  computeSAll(); buildYearSel(); updateWytUI();
+  if(ssel.t!=='all' && (!SD || (ssel.t==='wyt' && !SD.composites[ssel.v]) ||
+     (ssel.t==='year' && !SD.years.find(y=>y.wy===ssel.v)))) resetWytSel();
+  recomputeStorage(); buildStrip();
+  for(const el of document.querySelectorAll('.cursid')) el.textContent=data.sid;
+  render(cur);
+  if(simpleOn) sRefresh();
+}
+
+const pickers=[];
+function buildPicker(container){
+  const lab=document.createElement('label'); lab.textContent='Scenario';
+  const sel=document.createElement('select'); sel.title='Choose a management scenario';
+  for(const f in SCEN.families){
+    const g=document.createElement('optgroup'); g.label=SCEN.families[f];
+    let any=false;
+    for(const t of SCEN.themes) if(t.f===f){
+      const o=document.createElement('option'); o.value=t.w; o.textContent=t.label;
+      g.appendChild(o); any=true;
+    }
+    if(any) sel.appendChild(g);
+  }
+  const hb=document.createElement('div'); hb.className='hydbtns';
+  for(const h in SCEN.hyd){
+    const b=document.createElement('button'); b.dataset.h=h;
+    b.textContent=HYD_SHORT[h]||h; b.title=SCEN.hyd[h]+' hydrology';
+    b.onclick=()=>{ if(b.disabled) return;
+      selectScenario(runOf[sel.value+'|'+h]); };
+    hb.appendChild(b);
+  }
+  sel.onchange=()=>{
+    const curHyd=themeOf[curSid][1];
+    const h = runOf[sel.value+'|'+curHyd] ? curHyd
+            : Object.keys(SCEN.hyd).find(k=>runOf[sel.value+'|'+k]);
+    selectScenario(runOf[sel.value+'|'+h]);
+  };
+  const busy=document.createElement('div'); busy.className='busy';
+  busy.textContent='Loading scenario…';
+  container.append(lab, sel, hb, busy);
+  pickers.push({sel, hb, busy});
+}
+function syncPickers(){
+  const [w,h]=themeOf[curSid];
+  for(const p of pickers){
+    p.sel.value=w;
+    for(const b of p.hb.children){
+      b.classList.toggle('on', b.dataset.h===h);
+      b.disabled = !runOf[w+'|'+b.dataset.h];
+    }
+  }
+}
+async function selectScenario(sid){
+  if(!sid || sid===curSid || fetching) return;
+  if(!scenCache[sid]){
+    fetching=true;
+    for(const p of pickers){ p.busy.style.display='block'; p.sel.disabled=true; }
+    try{
+      const rsp=await fetch(SCEN_DIR+sid+'.json');
+      if(!rsp.ok) throw new Error('HTTP '+rsp.status);
+      scenCache[sid]=await rsp.json();
+      const extra=Object.keys(scenCache).filter(k=>k!=='s0020'&&k!==sid);
+      while(extra.length>4) delete scenCache[extra.shift()];  // cap memory
+    }catch(e){
+      fetching=false;
+      for(const p of pickers){
+        p.sel.disabled=false;
+        p.busy.textContent = location.protocol==='file:'
+          ? 'Other scenarios need the map served from its folder (with scenarios/) over http — or use the web version.'
+          : 'Could not load scenario data — check your connection.';
+        p.busy.style.display='block';
+      }
+      setTimeout(()=>{ for(const p of pickers){ p.busy.style.display='none';
+        p.busy.textContent='Loading scenario…'; } }, 6000);
+      syncPickers(); return;
+    }
+    fetching=false;
+    for(const p of pickers){ p.busy.style.display='none'; p.sel.disabled=false; }
+  }
+  curSid=sid;
+  applyScenario(scenCache[sid]);
+  syncPickers();
+}
+buildPicker(document.getElementById('scenrow1'));
+buildPicker(document.getElementById('scenrow2'));
+syncPickers();
+
 setMode(location.hash!=='#detail');
 </script>
 </body>
 </html>"""
 
-html = html.replace('__PAYLOAD__', payload).replace('__SIMPLE__', simple)
+html = (html.replace('__PAYLOAD__', payload).replace('__SIMPLE__', simple)
+            .replace('__SCENMETA__', scenmeta))
 open('CalSim3_water_map.html','w').write(html)
 import os
 print('HTML MB:', os.path.getsize('CalSim3_water_map.html')/1e6)

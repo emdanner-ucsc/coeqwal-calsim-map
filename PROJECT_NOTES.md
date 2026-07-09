@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 5, 2026 (session close) — shipped this session: About-panel two-views sentence; mobile pass (bottom sheet + compact header); 332 zoom-gated minor tributaries/canals; delivery-area toggle hover fix. **v1 feature freeze declared** (see Scope decision) — next phase is feedback from the COEQWAL team + first-time viewers. Still open: CARTO basemap licensing (before wide sharing); region-90 DU confirmation; real-phone check of the live site (6.5 MB page on cellular); reservoir labels + small-reservoir cleanup as pre-feedback polish candidates.*
+*Last updated: July 8, 2026 (session close) — shipped: **multi-scenario support** (43 scenarios, theme × hydrology picker in both modes, lazy fetch, s0020 still embedded). Negative-residual issue RESOLVED via signed split: negative years now surface as an "Other inflows (net)" segment on the sources bar (Eric's call, option 1); bars balance exactly for all 43. All three headless harnesses pass. Still open: CC50/CC95 baseline CSVs (s0047, s0056) from team; ask team what physically closes the balance in the 3.1 no-min-flow runs; CARTO licensing; region-90 DU confirmation; real-phone check.*
 
 ## What this is
 
@@ -49,6 +49,57 @@ Implemented as a mode of the existing map: lands in simple mode (URL hash `#deta
 - **Outflow split available:** `NDOI_MIN` (required) vs `NDOI − NDOI_MIN` (uncaptured), matching PPIC's ecosystem/uncaptured distinction.
 - **Refinement needed before build:** classify the 92 base reservoirs NOD vs SOD properly (Castaic/Pyramid are SWP terminal; Millerton/Friant is ambiguous — releases mostly go SOD via Friant-Kern). Beware `S_*` cycle-suffix duplicates (`_DELTA`, `_MON`, …) — use base names only.
 - **Sector split (COEQWAL framing) verified July 5, 2026:** aggregating `D_*` DIVERSION vars by DU class gives ag 8.4 / urban 0.6 / refuge 0.5 maf/yr; closure residual "losses & other" = mean 4.1 maf/yr (16% of sources), never negative across 100 years (but 25–29% in critical years). **Open questions:** (1) region-90 DUs (`90_PA*`, 0.68 maf/yr — most of SoCal SWP water) classify as *ag* under the second-letter rule. **Eric's read (July 5, 2026): likely urban — treated provisionally as urban in simple-mode data; CHECK BACK with CalSim3 docs/COEQWAL team to confirm before publishing.** (2) Non-DU urban diversions (CCC→CCWD 78 TAF/yr, NBA, SBA `D_CAA005_SBA000`) currently land in losses&other; consider a curated urban supplement list.
+
+## Multi-scenario support (July 8, 2026 — built, verification paused)
+
+Context: the team decided the website database will NOT hold full time series for all
+scenarios (CSV downloads only), so scenario data for this map is precomputed into static
+per-scenario JSON — which also unblocked the long-deferred scenario comparison work.
+
+**Built and verified this session:**
+- `build/scenario_meta.json` — 20 themes × 3 hydrologies (hist/cc50/cc95), 43 runs, from
+  the team's scenario-listing xlsx (Web Platform IDs, short descriptions, family groups
+  1=Baselines … 7=New conveyance). Baseline gap: no CC50/CC95 baselines on hand —
+  **ask team for s0047 + s0056 CSVs** so climate runs compare to their own baseline.
+- `build/build_scenario.py <csv> [outdir]` — extracts one scenario → `scenarios/<sid>.json`
+  (~5 MB: wyt + arcs/res/pumps/dus series keyed by ID + simple-mode payload or null).
+  Joins by variable NAME (column layouts differ: 17k–24k cols). Feature set frozen from
+  payload.json; qref/capacity/particle scales frozen from base for cross-scenario
+  comparability. **Verified: reproduces s0020 embedded payload byte-identically**
+  (needed the double-round quirk: round(round(v,1))). Uses pandas (fast: ~2.5 s/scenario).
+- All 43 `scenarios/*.json` generated (~220 MB total, ~1–2 MB each gzipped over the wire).
+  6 USBR Alt3 runs (5.x: s0039/41/98/99/100/101) lack I_SACBASIN/I_SJRBASIN → simple:null.
+- `make_html.py`: scenario picker (theme optgroups + hydrology pill buttons) in BOTH modes;
+  lazy fetch + in-memory cache (cap ~6); s0020 embedded so the single-file property holds
+  for the default; file:// fallback message; `.cursid` spans update; no-simple notice for
+  USBR Alt3 runs (body.nosimple); WYT buttons disable when a hydrology has no such years;
+  strip rebuilt on mode switch (was zero-size if built while hidden); TSMAX has frozen
+  floor at base max (comparable storage curves, never clips).
+- `build/screenshot_scenarios.py` — headless harness #3: serves repo over http, drives the
+  picker, asserts series/wyt swap against the JSON files, no-simple notice, exact restore
+  to s0020. **All passing.** (Gotchas: must route vendor leaflet like screenshot.py; must
+  Escape the about panel before clicking; use C_SAC003 — there is no C_SAC000 arc.)
+
+**Negative-residual issue (found + RESOLVED July 8, 2026):** the tier-1 residual
+"losses & other" = sources − deliveries − NET_DICU − NDOI goes NEGATIVE for the
+remove-min-flows family (3.1): s0030 hist mean −0.3 maf/yr (58/99 yrs), s0071 cc50 −1.3
+(75/99), s0091 cc95 −1.8 (82/99); mildly for the eflows+CVgwLU family (3.3): s0032
+(16/99), s0073 (28/99). All 32 other simple-capable scenarios healthy (+1.9 to +3.5
+maf/yr, ≤4 neg yrs — full audit, all 43). **Resolution (Eric's call):** store the residual
+split signed — per-year `uses.losses = max(r,0)`, `sources.other = max(−r,0)` — and show
+"Other inflows (net)" as a gray-blue segment on the sources bar (only drawn when
+> 50 TAF). Bars now balance exactly for every scenario (verified: worst |src−use−ofl| =
+0.0 TAF). Implemented identically in build_scenario.py AND simple_mode_data.py (keep in
+sync!); simple_payload.json regenerated from scenarios/s0020.json (equivalent — the two
+code paths were verified byte-identical). Physical interpretation still worth asking the
+COEQWAL team: what closes the balance when min-flow requirements are removed?
+Audit script: outputs/audit_losses.py from the July 8 session (recreate from git history
+of this note if needed — computes pre-clamp residual per CSV).
+
+**Verified July 8:** s0020.json byte-identical to embedded payload; raw-CSV spot-checks
+(s0091 C_SAC003 + S_SHSTA at 1976-10, independent of pipeline); balance closure all 43;
+node --check; all three harnesses (desktop 6 shots, mobile 5, scenario-switch 5 with
+value assertions) pass with no page errors.
 
 ## Minor arcs — zoom-gated tributaries & distribution canals (July 5, 2026)
 

@@ -1,0 +1,201 @@
+{
+ "hyd": {
+  "hist": "Historical",
+  "cc50": "Moderate climate change",
+  "cc95": "Severe climate change"
+ },
+ "families": {
+  "1": "Baselines",
+  "2": "Groundwater limits",
+  "3": "Environmental flows",
+  "4": "Community water systems",
+  "5": "Delta outflow requirements",
+  "6": "Reservoir & Delta operations",
+  "7": "New conveyance"
+ },
+ "themes": [
+  {
+   "w": "1.1",
+   "f": "1",
+   "label": "DWR 2023 Baseline with TUCPs & 2020 land use",
+   "runs": {
+    "hist": "s0020"
+   }
+  },
+  {
+   "w": "2.1",
+   "f": "2",
+   "label": "Limiting groundwater pumping in the San Joaquin",
+   "runs": {
+    "hist": "s0025",
+    "cc50": "s0067",
+    "cc95": "s0087"
+   }
+  },
+  {
+   "w": "2.2",
+   "f": "2",
+   "label": "Reducing irrigated acreage in the San Joaquin",
+   "runs": {
+    "hist": "s0026",
+    "cc50": "s0068",
+    "cc95": "s0088"
+   }
+  },
+  {
+   "w": "2.3",
+   "f": "2",
+   "label": "Limiting groundwater pumping in the Central Valley",
+   "runs": {
+    "hist": "s0027",
+    "cc50": "s0062",
+    "cc95": "s0063"
+   }
+  },
+  {
+   "w": "2.4",
+   "f": "2",
+   "label": "Reducing irrigated acreage in the Central Valley",
+   "runs": {
+    "hist": "s0028",
+    "cc50": "s0069",
+    "cc95": "s0089"
+   }
+  },
+  {
+   "w": "3.1",
+   "f": "3",
+   "label": "Remove minimum flow requirements throughout CV",
+   "runs": {
+    "hist": "s0030",
+    "cc50": "s0071",
+    "cc95": "s0091"
+   }
+  },
+  {
+   "w": "3.2",
+   "f": "3",
+   "label": "Variation of functional flows that removes the downstream Sac, SJR, and Delta flow requirements",
+   "runs": {
+    "hist": "s0046",
+    "cc50": "s0084"
+   }
+  },
+  {
+   "w": "3.3",
+   "f": "3",
+   "label": "Functional flows for all sites with reduced irrigated acreage for CV",
+   "runs": {
+    "hist": "s0032",
+    "cc50": "s0073"
+   }
+  },
+  {
+   "w": "3.4",
+   "f": "3",
+   "label": "Salmon-friendly flows on the Sac & SJR with Shasta storage protections",
+   "runs": {
+    "hist": "s0031",
+    "cc50": "s0072",
+    "cc95": "s0092"
+   }
+  },
+  {
+   "w": "3.5",
+   "f": "3",
+   "label": "Salmon-friendly flows on the Sac & SJR with Shasta storage protections and reduced irrigated acreage for CV",
+   "runs": {
+    "hist": "s0033",
+    "cc50": "s0074"
+   }
+  },
+  {
+   "w": "4.1",
+   "f": "4",
+   "label": "Prioritizing health and human safety surface delivery levels to community water systems",
+   "runs": {
+    "hist": "s0035",
+    "cc50": "s0075",
+    "cc95": "s0095"
+   }
+  },
+  {
+   "w": "4.2",
+   "f": "4",
+   "label": "Prioritizing functional delivery levels to community water systems",
+   "runs": {
+    "hist": "s0036",
+    "cc50": "s0076",
+    "cc95": "s0096"
+   }
+  },
+  {
+   "w": "4.3",
+   "f": "4",
+   "label": "Prioritizing full contract or demand levels to community water systems",
+   "runs": {
+    "hist": "s0037",
+    "cc50": "s0077",
+    "cc95": "s0097"
+   }
+  },
+  {
+   "w": "5.1",
+   "f": "5",
+   "label": "USBR Alt3 with 2020 land use - 35% unimpaired Delta outflow with upstream actions to protect storage",
+   "runs": {
+    "cc95": "s0099"
+   }
+  },
+  {
+   "w": "5.2",
+   "f": "5",
+   "label": "USBR Alt3 with 2020 land use - 45% unimpaired Delta outflow with upstream actions to protect storage",
+   "runs": {
+    "hist": "s0041",
+    "cc95": "s0100"
+   }
+  },
+  {
+   "w": "5.3",
+   "f": "5",
+   "label": "USBR Alt3 with 2020 land use - 55% unimpaired Delta outflow with upstream actions to protect storage",
+   "runs": {
+    "cc95": "s0101"
+   }
+  },
+  {
+   "w": "5.4",
+   "f": "5",
+   "label": "USBR Alt3 with 2020 land use - 65% unimpaired Delta outflow with upstream actions to protect storage",
+   "runs": {
+    "hist": "s0039",
+    "cc95": "s0098"
+   }
+  },
+  {
+   "w": "6.1",
+   "f": "6",
+   "label": "Target an increase in Shasta carryover of 20% compared to s0020 baseline",
+   "runs": {
+    "cc95": "s0102"
+   }
+  },
+  {
+   "w": "6.4",
+   "f": "6",
+   "label": "Remove the fall X2 requirement in the Delta",
+   "runs": {
+    "cc95": "s0103"
+   }
+  },
+  {
+   "w": "7.4",
+   "f": "7",
+   "label": "An updated version of the Delta Conveyance Project with 2020 land use",
+   "runs": {
+    "cc95": "s0105"
+   }
+  }
+ ]
+}
