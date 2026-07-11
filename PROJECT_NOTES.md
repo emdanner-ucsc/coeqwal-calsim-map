@@ -1,6 +1,6 @@
 # CalSim3 Central Valley Water Map — Project Notes
 
-*Last updated: July 9, 2026 (session close) — shipped: **A/B comparison view** (flip toggle + dual click-charts + side-by-side simple-mode bars + dual storage curves on the strip + shareable hash links; all four v1 pieces, Eric's calls answered July 9). All three harnesses pass, scenario harness extended to 8 shots with A/B assertions. Still open: CC50/CC95 baseline CSVs (s0047, s0056) from team — once they land, revisit the defaultB() fallback so climate runs compare to their own baseline; ask team what physically closes the balance in the 3.1 no-min-flow runs; CARTO licensing; region-90 DU confirmation; real-phone check; difference view (v2).*
+*Last updated: July 9, 2026 (session close) — shipped: **A/B comparison view** (flip toggle + dual click-charts + side-by-side simple-mode bars + dual storage curves on the strip + shareable hash links; all four v1 pieces, Eric's calls answered July 9), pushed as 41f916f via the bundle workflow (see Cloud-session git workflow). All three harnesses pass, scenario harness extended to 8 shots with A/B assertions. Pre-publication checklist added. Still open: CC50/CC95 baseline CSVs (s0047, s0056) from team — once they land, revisit the defaultB() fallback so climate runs compare to their own baseline; ask team what physically closes the balance in the 3.1 no-min-flow runs; publication checklist items (CARTO licensing, region-90 DU, team review, real-phone check); difference view (v2).*
 
 ## What this is
 
@@ -153,6 +153,30 @@ committed HTML (verified byte-identical round-trip against all three embedded pa
 
 Difference view (flow deltas as red/blue line coloring, storage delta circles) is v2;
 decide after team feedback on the toggle.
+
+## Pre-publication checklist (before enabling GitHub Pages)
+
+The map is deliberately unpublished. When these are resolved, publishing is one switch:
+repo Settings → Pages → deploy from `main`, then the map is live at
+`emdanner-ucsc.github.io/coeqwal-calsim-map/CalSim3_water_map.html` (scenario fetch and
+comparison links work there; file:// only supports the embedded s0020).
+
+1. **CARTO basemap licensing** — verify tile usage terms for a public site, or self-host.
+2. **Region-90 DU classification** — provisionally urban (Eric's read, July 5, 2026);
+   confirm with CalSim3 docs / COEQWAL team before publishing numbers.
+3. **Team review** — incl. what physically closes the balance in the 3.1 no-min-flow
+   runs, since "Other inflows (net)" is now visible to anyone comparing scenarios.
+4. **Real-phone check** of the mobile layout once live.
+
+## Cloud-session git workflow (July 9, 2026)
+
+Claude's cloud sessions have no GitHub credentials, and the desktop file-write bridge
+may be unavailable — so: commit in the cloud clone (author Eric Danner
+<emdanner@ucsc.edu>, committer Claude <noreply@anthropic.com>), `git bundle create
+<name>.bundle origin/main..main`, send the bundle in chat. Eric downloads it and runs
+locally: `git pull ~/Downloads/<name>.bundle main`, then `git push origin main`.
+Give Eric the exact commands each time, WITHOUT `#` comment lines (his interactive zsh
+errors on them and on `(...)`/`%h` in comments). Verify the expected tip hash after pull.
 
 ## Minor arcs — zoom-gated tributaries & distribution canals (July 5, 2026)
 
